@@ -1,11 +1,11 @@
 # OverlayLock Rust rewrite plan
 
 > **Status: incomplete, 2026-11-08.** Every stage ran, and the app works live on every check run.
-> Left open: the first remote CI run (needs the owner to create the GitHub repository and push),
-> the live monitor-scale change (stage 07; Windows asks for a sign-out here), the Lite parity
-> run (stage 14), and a live unplug with `--monitors cursor` for the OL10 amendment. A follow-up
-> plan in `plans/_future/uac-yield-spike-plan/` covers UAC prompts that trigger the yield.
-> Nothing is committed. Authored 2026-11-08. Lives at `plans/overlay-lock-rewrite-plan/` while
+> Left open: the live monitor-scale change (stage 07; Windows asks for a sign-out here), the
+> Lite parity run (stage 14), and a live unplug with `--monitors cursor` for the OL10 amendment.
+> The first remote CI run is green (stage 12). The follow-up plan
+> `plans/_complete/uac-yield-spike-plan/` stopped UAC prompts from triggering the yield.
+> Pushed to `github.com/BootBlock/OverlayLock` on 2026-11-08. Authored 2026-11-08. Lives at `plans/overlay-lock-rewrite-plan/` while
 > it is written and run. Filing rules: `plans/_complete/README.md`.
 
 ## What this adds
@@ -188,7 +188,7 @@ process command line, and a config file comes in a later plan.
 | 09 | `09-mouse-hook.md` | `WH_MOUSE_LL` | done 2026-11-08 (one live failure not reproduced) |
 | 10 | `10-yield-on-ctrl-alt-del.md` | SAS detection spike and yield | done 2026-11-08 (+ hooks pass input on while locked) |
 | 11 | `11-icon.md` | SpectraWrite-style glyph icon, owner pick, `xtask icon`, embed | done 2026-11-08 (U+EE3F LockscreenDesktop) |
-| 12 | `12-ci-release.md` | GitHub Actions CI and tagged release | done 2026-11-08 (first remote run outstanding) |
+| 12 | `12-ci-release.md` | GitHub Actions CI and tagged release | done 2026-11-08 (first remote run green after a lint fix) |
 | 13 | `13-readme.md` | README with usage, options, recovery, limits | done 2026-11-08 |
 | 14 | `14-verification.md` | Fresh build, size and start-time measures, live checks, review | done 2026-11-08 (Lite parity outstanding) |
 

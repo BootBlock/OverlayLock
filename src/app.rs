@@ -133,7 +133,10 @@ impl App {
         }
         let hooked = self.hooks.borrow().is_some();
         if hooked || self.options.yield_on_ctrl_alt_del {
-            *self.watch.borrow_mut() = Some(SecureDesktopWatch::start(controller)?);
+            *self.watch.borrow_mut() = Some(SecureDesktopWatch::start(
+                controller,
+                self.options.yield_on_ctrl_alt_del,
+            )?);
         }
         Ok(())
     }
@@ -154,8 +157,8 @@ impl App {
                     hooks.set_paused(false);
                     hooks.resync();
                 }
-                Signal::DesktopSwitch { ours: true } => hooks.resync(),
-                Signal::DesktopSwitch { ours: false } | Signal::Settled => {}
+                Signal::DesktopReturned => hooks.resync(),
+                Signal::DesktopLeft { .. } | Signal::Settled => {}
             }
         }
         if !self.options.yield_on_ctrl_alt_del {

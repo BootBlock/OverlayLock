@@ -13,7 +13,8 @@
 > `WTS_SESSION_UNLOCK`, and reload the held keys (`GetAsyncKeyState`) on each return and unlock.
 > (4) The controller handles the yield directly on the settle timer; no `WM_APP_YIELD` was needed.
 > (5) Live runs used `--timeout 60s`, not 120 s (the seed caps every run at 60 s). (6) A UAC prompt
-> on the secure desktop also yields; the README says so.
+> on the secure desktop also yielded; `plans/_complete/uac-yield-spike-plan/` fixed that on
+> 2026-11-08 (`consent.exe` against `LogonUI.exe` at the switch away).
 
 Repo: `P:\Source\Rust\OverlayLock`. Prerequisites: 09 done. Locked: OL15.
 

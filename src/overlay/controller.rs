@@ -116,13 +116,19 @@ extern "system" fn window_proc(
     // by `create` with a `Box<Controller>` as `lpParam`.
     unsafe {
         super::dispatch(hwnd, message, wparam, lparam, |state: &Controller| {
-            handle(state, hwnd, message, wparam)
+            handle(state, hwnd, message, wparam, lparam)
         })
     }
 }
 
 /// Handles one message, or returns `None` for the default handling.
-fn handle(state: &Controller, hwnd: HWND, message: u32, wparam: WPARAM) -> Option<LRESULT> {
+fn handle(
+    state: &Controller,
+    hwnd: HWND,
+    message: u32,
+    wparam: WPARAM,
+    lparam: LPARAM,
+) -> Option<LRESULT> {
     match message {
         WM_TIMER if wparam.0 == TIMER_FOCUS => {
             if !state.app.focus_tick() {
@@ -146,8 +152,14 @@ fn handle(state: &Controller, hwnd: HWND, message: u32, wparam: WPARAM) -> Optio
             Some(LRESULT(0))
         }
         WM_APP_DESKTOP_SWITCH => {
-            let ours = wparam.0 != 0;
-            desktop_signal(state, hwnd, Signal::DesktopSwitch { ours });
+            let signal = if wparam.0 != 0 {
+                Signal::DesktopReturned
+            } else {
+                Signal::DesktopLeft {
+                    elevation_prompt: lparam.0 != 0,
+                }
+            };
+            desktop_signal(state, hwnd, signal);
             Some(LRESULT(0))
         }
         WM_WTSSESSION_CHANGE => {

@@ -162,8 +162,10 @@ If you forget the password, these are the ways out, from the gentlest:
    stays hidden behind the overlay and gets no input from `--block-keys` and `--block-mouse`, so
    choose **Sign out** instead; that ends the lock along with everything else in the session.
 
-`--yield-on-ctrl-alt-del` also steps back after a User Account Control prompt, because Windows
-shows those on the same secure screen. Win+L never makes it step back.
+A User Account Control prompt uses the same secure screen as Ctrl+Alt+Del, but it does not make
+OverlayLock step back: it looks at which Windows program owns the screen when it appears. When it
+cannot tell, it steps back, so the lock is never harder to leave than intended. Win+L never makes
+it step back.
 
 ## Build from source
 
