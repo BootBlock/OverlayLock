@@ -11,7 +11,11 @@
 > lost the focus; the leaving overlay now hands the focus to another overlay just before it is
 > destroyed (`App::hand_over_focus`), which takes nothing from another app (OL10). With
 > `--monitors cursor` no other overlay exists at that moment; the owner amended OL10 so the
-> replacement overlay takes the focus back in that one case (not yet checked live).
+> replacement overlay takes the focus back in that one case. Checked live on 2026-11-08: the
+> cursor on the top monitor, `--monitors cursor --timeout 60s`, that monitor unplugged; the new
+> overlay on the main monitor took the focus (a traced build logged `WM_SETFOCUS` about 0.4 s after
+> the change, and stayed on top until the timeout in two runs), and typing the password right
+> after the unplug ended the lock (exit 0 after 8 s).
 > The tests used `--timeout 20s` from the start (06 landed before any live run).
 
 Repo: `P:\Source\Rust\OverlayLock`. Prerequisites: 02, 03, 04 done. Locked: OL7, OL8 (GDI half),

@@ -1,9 +1,9 @@
 # OverlayLock Rust rewrite plan
 
 > **Status: incomplete, 2026-11-08.** Every stage ran, and the app works live on every check run.
-> Left open: the live monitor-scale change (stage 07; Windows asks for a sign-out here), the
-> Lite parity run (stage 14), and a live unplug with `--monitors cursor` for the OL10 amendment.
-> The first remote CI run is green (stage 12). The follow-up plan
+> Left open: the live monitor-scale change (stage 07; Windows asks for a sign-out here) and the
+> Lite parity run (stage 14). The first remote CI run is green (stage 12), and the OL10 amendment
+> passed a live unplug with `--monitors cursor` (stage 05). The follow-up plan
 > `plans/_complete/uac-yield-spike-plan/` stopped UAC prompts from triggering the yield.
 > Pushed to `github.com/BootBlock/OverlayLock` on 2026-11-08. Authored 2026-11-08. Lives at `plans/overlay-lock-rewrite-plan/` while
 > it is written and run. Filing rules: `plans/_complete/README.md`.
