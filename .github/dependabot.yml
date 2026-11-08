@@ -4,6 +4,20 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    groups:
+      # The windows-rs crates are released together; update them in one pull request.
+      windows-rs:
+        patterns:
+          - "windows"
+          - "windows-*"
+    ignore:
+      # The app and xtask use windows-numerics only for the Vector2 and Matrix3x2 types that the
+      # windows crate's Direct2D API takes, so its version must be the one windows depends on.
+      # Raise it by hand together with windows; a newer windows-numerics alone does not build.
+      - dependency-name: windows-numerics
+        update-types:
+          - version-update:semver-major
+          - version-update:semver-minor
   - package-ecosystem: github-actions
     directory: /
     schedule:

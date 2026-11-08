@@ -2,6 +2,14 @@
   "schema": 1,
   "entries": [
     {
+      "id": "a51258",
+      "kind": "added",
+      "text": "OverlayLock can be downloaded from the GitHub Releases page as a zip for x64 or ARM64 PCs, and a maintainer can publish a new release from the Actions tab with Release > Run workflow.",
+      "date": "2026-11-08",
+      "commit": "4b19824",
+      "agent": "claude"
+    },
+    {
       "id": "25eb8f",
       "kind": "added",
       "text": "OverlayLock has its own rainbow lock-screen icon, in the same style as SpectraWrite's.",

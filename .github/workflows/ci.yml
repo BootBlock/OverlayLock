@@ -29,10 +29,9 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Test
         run: cargo test --workspace
-      - name: Build release (x64)
-        run: cargo build --release --target x86_64-pc-windows-msvc
-      - name: Build release (ARM64)
-        run: cargo build --release --target aarch64-pc-windows-msvc
+      - name: Build and package the release (x64 and ARM64)
+        # The release workflow's own packaging step, so a broken package shows up before a release.
+        run: cargo run --locked --package xtask -- dist
 
   msrv:
     name: Minimum supported Rust version

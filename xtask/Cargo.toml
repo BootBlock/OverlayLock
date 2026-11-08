@@ -9,6 +9,7 @@ publish = false
 
 [dependencies]
 # Matrix3x2 and Vector2 for Direct2D: part of the windows crate family, which re-exports neither.
+# Keep it at the version the windows crate depends on (see .github/dependabot.yml).
 windows-numerics = "0.3.1"
 
 [dependencies.windows]
@@ -20,6 +21,7 @@ features = [
     "Win32_Graphics_DirectWrite",
     "Win32_Graphics_Dxgi_Common",
     "Win32_Graphics_Imaging",
+    "Win32_Security_Cryptography",
     "Win32_System_Com",
     "Win32_System_Com_StructuredStorage",
 ]

@@ -67,27 +67,12 @@ jobs:
               default { Write-Error "git ls-remote failed with exit code $LASTEXITCODE."; exit 1 }
             }
           }
-          "version=$version" >> $env:GITHUB_OUTPUT
           "tag=$tag" >> $env:GITHUB_OUTPUT
       - name: Test
         run: cargo test --workspace --locked
-      - name: Build
-        run: |
-          cargo build --release --locked --target x86_64-pc-windows-msvc
-          cargo build --release --locked --target aarch64-pc-windows-msvc
-      - name: Package
-        shell: pwsh
-        env:
-          VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          New-Item -ItemType Directory -Force dist | Out-Null
-          foreach ($target in 'x86_64-pc-windows-msvc', 'aarch64-pc-windows-msvc') {
-            $zip = "dist/overlay-lock-$env:VERSION-$target.zip"
-            Compress-Archive -Path "target/$target/release/overlay-lock.exe", LICENSE, README.md -DestinationPath $zip
-          }
-          Get-ChildItem dist/*.zip | ForEach-Object {
-            "$((Get-FileHash $_ -Algorithm SHA256).Hash.ToLowerInvariant())  $($_.Name)"
-          } | Set-Content -Encoding ascii dist/SHA256SUMS.txt
+      - name: Build and package
+        # The same command a maintainer runs locally: zips and SHA256SUMS.txt in !Distribution.
+        run: cargo run --locked --package xtask -- dist
       - name: Create the release
         shell: pwsh
         env:
@@ -98,4 +83,4 @@ jobs:
         run: |
           $flags = @('--generate-notes', '--target', $env:SHA, '--title', "OverlayLock $env:TAG")
           if ($env:PRERELEASE -eq 'true') { $flags += '--prerelease' }
-          gh release create $env:TAG @flags (Get-ChildItem dist/*).FullName
+          gh release create $env:TAG @flags (Get-ChildItem -LiteralPath '!Distribution' -File).FullName

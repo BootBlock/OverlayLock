@@ -1,10 +1,11 @@
 //! Development tasks for OverlayLock, run as `cargo xtask <command>`.
 
+mod dist;
 mod icon;
 
 use std::process::ExitCode;
 
-const USAGE: &str = "Usage: cargo xtask <command>\n\nCommands:\n  icon    render assets/overlay-lock.ico (see cargo xtask icon --help)";
+const USAGE: &str = "Usage: cargo xtask <command>\n\nCommands:\n  dist    build the release zips into !Distribution\\ (see cargo xtask dist --help)\n  icon    render assets/overlay-lock.ico (see cargo xtask icon --help)";
 
 fn main() -> ExitCode {
     let mut args = std::env::args().skip(1);
@@ -13,6 +14,7 @@ fn main() -> ExitCode {
             println!("{USAGE}");
             return ExitCode::SUCCESS;
         }
+        Some("dist") => dist::run(args),
         Some("icon") => icon::run(args),
         Some(other) => Err(format!("unknown command '{other}'\n\n{USAGE}")),
     };

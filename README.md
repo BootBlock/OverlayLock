@@ -178,8 +178,16 @@ cargo build --release --target aarch64-pc-windows-msvc
 ```
 
 The executable is `target\release\overlay-lock.exe` (or under `target\aarch64-pc-windows-msvc`
-for ARM64). The icon is generated, not drawn: to render it again from the Segoe Fluent Icons
-glyph, run:
+for ARM64). To build the same zips a release publishes, run:
+
+```powershell
+cargo xtask dist
+```
+
+It builds both targets and replaces the `!Distribution` folder with one zip per target (each holds
+`overlay-lock.exe`, `LICENSE` and `README.md`) and `SHA256SUMS.txt`. Add `--target <triple>` to
+build only that target. The icon is generated, not drawn: to render it again from the Segoe Fluent
+Icons glyph, run:
 
 ```powershell
 cargo xtask icon
@@ -189,6 +197,10 @@ Before you send a change, run `cargo fmt --all --check`, `cargo clippy --workspa
 -- -D warnings` and `cargo test --workspace`. The tests in `tests/hooks.rs` take over the keyboard
 and mouse for a few seconds, so they only run when you ask for them:
 `cargo test --test hooks -- --ignored --test-threads=1`.
+
+## Author
+
+OverlayLock is written by Joe Cox ([bootblock.co.uk](https://bootblock.co.uk)).
 
 ## Licence
 
