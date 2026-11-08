@@ -36,7 +36,7 @@ fn main() {
 }
 
 /// Gets the name the release zip gives the executable for the target being built, such as
-/// `overlay-lock-x64.exe`, or `overlay-lock.exe` for a target no release ships.
+/// `overlay-lock_x64.exe`, or `overlay-lock.exe` for a target no release ships.
 fn original_filename() -> String {
     let triple = std::env::var("TARGET").expect("Cargo sets TARGET for build scripts");
     TARGETS

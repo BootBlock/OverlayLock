@@ -1,13 +1,16 @@
 //! `cargo xtask dist`: builds the release and lays it out in one of two ways.
 //!
-//! - With no `--zip`, it installs one target (this machine's, unless `--target` names another)
-//!   into `!Distribution\` at the repository root: `overlay-lock.exe`, `LICENSE` and `README.md`,
-//!   ready to run from there, for example from a Stream Deck button. It replaces only those three
-//!   files, so the folder and its path stay put between builds.
+//! - With no `--zip`, it installs this machine's target, or each target `--target` names, into
+//!   `!Distribution\` at the repository root: the executable named for its target, such as
+//!   `overlay-lock_x64.exe`, with `LICENSE` and `README.md`, ready to run from there, for example
+//!   from a Stream Deck button. It replaces only those files, so the folder and each path stay put
+//!   between builds, and it removes the `overlay-lock.exe` that earlier versions installed.
 //! - With `--zip <folder>`, it writes what a GitHub release publishes into that folder: one zip per
 //!   target and `SHA256SUMS.txt`. Each zip holds `LICENSE`, `README.md` and the executable named
-//!   for its target, such as `overlay-lock-x64.exe`, so the three can share a folder. CI and the
-//!   release workflow run this form.
+//!   for its target, as installed. CI and the release workflow run this form.
+//!
+//! Every executable carries its target in its name, so the builds for each processor can share a
+//! folder.
 //!
 //! A target is named by its short name (`x64`, `x86` or `arm64`), which the zip names use, or by
 //! its Rust target triple.
@@ -34,18 +37,18 @@ const HOST_TARGET: Target = TARGETS[if cfg!(target_arch = "aarch64") {
     0
 }];
 
-/// The file name of the executable Cargo builds, and of the installed copy, whose path a Stream Deck
-/// button or a shortcut keeps.
+/// The file name of the executable Cargo builds, and of the copy earlier versions of this task
+/// installed into `!Distribution\`.
 const EXE: &str = "overlay-lock.exe";
 
 /// The files shipped beside the executable, relative to the repository root.
 const EXTRA_FILES: [&str; 2] = ["LICENSE", "README.md"];
 
 const USAGE: &str = "Usage: cargo xtask dist [--target <target>] [--zip <folder> [--target <target>]...]\n\n\
-  (no --zip)         build for this machine and install overlay-lock.exe, LICENSE and README.md\n\
-                     into !Distribution\\, ready to run from there\n\
-  --target <target>  the target to build: x64, x86 or arm64, or its target triple; with --zip,\n\
-                     repeat it for more (default with --zip: all three)\n\
+  (no --zip)         build and install overlay-lock_<target>.exe, LICENSE and README.md into\n\
+                     !Distribution\\, ready to run from there\n\
+  --target <target>  the target to build: x64, x86 or arm64, or its target triple; repeat it for\n\
+                     more (default: this machine's, or all three with --zip)\n\
   --zip <folder>     write one release zip per target and SHA256SUMS.txt into <folder>, relative\n\
                      to the repository root\n\n\
 Each target is built with `cargo build --release --locked`.";
@@ -79,12 +82,14 @@ pub fn run(args: impl Iterator<Item = String>) -> Result<(), String> {
         }
         return write_zips(&root, &root.join(folder), &targets);
     }
-    let target = match targets.as_slice() {
-        [] => HOST_TARGET,
-        [target] => *target,
-        _ => return Err(format!("the installed build takes one --target\n\n{USAGE}")),
-    };
-    install(&root, &build(&root, target)?)
+    if targets.is_empty() {
+        targets.push(HOST_TARGET);
+    }
+    let mut builds = Vec::with_capacity(targets.len());
+    for target in targets {
+        builds.push((target, build(&root, target)?));
+    }
+    install(&root, &builds)
 }
 
 /// Finds the release target a `--target` value names, by its short name or its triple, ignoring
@@ -104,25 +109,31 @@ fn parse_target(value: &str) -> Result<Target, String> {
         })
 }
 
-/// Copies the executable and the extra files into `!Distribution\`, replacing only those files.
+/// Copies each built executable, under its target's name, and the extra files into
+/// `!Distribution\`, replacing only those files, then removes the `overlay-lock.exe` that earlier
+/// versions of this task installed there.
 ///
 /// Each file is written beside its destination first and then renamed over it, so a failed copy
-/// never leaves a half-written executable. A running `overlay-lock.exe` cannot be replaced: end
-/// the lock and run the task again.
-fn install(root: &Path, exe: &Path) -> Result<(), String> {
+/// never leaves a half-written executable. A running executable cannot be replaced: end the lock
+/// and run the task again.
+fn install(root: &Path, builds: &[(Target, PathBuf)]) -> Result<(), String> {
     let folder = root.join(INSTALL_DIR);
     fs::create_dir_all(&folder)
         .map_err(|error| format!("cannot create {}: {error}", folder.display()))?;
-    let files = std::iter::once((exe.to_path_buf(), EXE))
-        .chain(EXTRA_FILES.iter().map(|name| (root.join(name), *name)));
-    for (source, name) in files {
-        let destination = folder.join(name);
+    let executables = builds
+        .iter()
+        .map(|(target, exe)| (exe.clone(), exe_name(*target), true));
+    let extras = EXTRA_FILES
+        .iter()
+        .map(|name| (root.join(name), (*name).to_string(), false));
+    for (source, name, is_exe) in executables.chain(extras) {
+        let destination = folder.join(&name);
         let staged = folder.join(format!("{name}.new"));
         fs::copy(&source, &staged)
             .map_err(|error| format!("cannot copy {}: {error}", source.display()))?;
         if let Err(error) = fs::rename(&staged, &destination) {
             let _ = fs::remove_file(&staged);
-            let hint = if name == EXE {
+            let hint = if is_exe {
                 " (is OverlayLock running from there? End the lock and run this again)"
             } else {
                 ""
@@ -134,7 +145,28 @@ fn install(root: &Path, exe: &Path) -> Result<(), String> {
         }
         println!("{}", destination.display());
     }
-    Ok(())
+    remove_superseded(&folder)
+}
+
+/// Removes the `overlay-lock.exe` that earlier versions of this task installed, so a shortcut or a
+/// Stream Deck button still pointing at it fails instead of starting an old build.
+fn remove_superseded(folder: &Path) -> Result<(), String> {
+    let superseded = folder.join(EXE);
+    match fs::remove_file(&superseded) {
+        Ok(()) => {
+            println!(
+                "removed {}: point shortcuts at the overlay-lock_<target>.exe beside it",
+                superseded.display()
+            );
+            Ok(())
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
+        Err(error) => Err(format!(
+            "cannot remove {}: {error} (is OverlayLock running from there? End the lock and run \
+             this again)",
+            superseded.display()
+        )),
+    }
 }
 
 /// Builds each target and writes its release zip and `SHA256SUMS.txt` into `folder`. Other files
@@ -440,10 +472,11 @@ mod tests {
         assert_eq!(json_string_field(r#"{"k":"bad \q"}"#, "k"), None);
     }
 
-    /// Replaces the three shipped files, keeps anything else in the folder, and leaves no staged
+    /// Installs each executable under its target's name and replaces the extra files, keeps
+    /// anything else in the folder, removes the superseded `overlay-lock.exe`, and leaves no staged
     /// `.new` file behind.
     #[test]
-    fn install_replaces_only_the_shipped_files() {
+    fn install_names_each_executable_for_its_target() {
         let root =
             std::env::temp_dir().join(format!("overlay-lock-dist-test-{}", std::process::id()));
         let _ = fs::remove_dir_all(&root);
@@ -451,16 +484,20 @@ mod tests {
         fs::create_dir_all(&folder).expect("the test folder is created");
         fs::write(root.join("LICENSE"), "new licence").expect("written");
         fs::write(root.join("README.md"), "new readme").expect("written");
-        let exe = root.join("built.exe");
-        fs::write(&exe, "new exe").expect("written");
+        let x64 = root.join("x64.exe");
+        let arm64 = root.join("arm64.exe");
+        fs::write(&x64, "new x64").expect("written");
+        fs::write(&arm64, "new arm64").expect("written");
         fs::write(folder.join("overlay-lock.exe"), "old exe").expect("written");
+        fs::write(folder.join("overlay-lock_x64.exe"), "old x64").expect("written");
         fs::write(folder.join("LICENSE"), "old licence").expect("written");
         fs::write(folder.join("notes.txt"), "mine").expect("written");
 
-        install(&root, &exe).expect("the install succeeds");
+        install(&root, &[(TARGETS[0], x64), (TARGETS[2], arm64)]).expect("the install succeeds");
 
         let read = |name: &str| fs::read_to_string(folder.join(name)).expect("readable");
-        assert_eq!(read("overlay-lock.exe"), "new exe");
+        assert_eq!(read("overlay-lock_x64.exe"), "new x64");
+        assert_eq!(read("overlay-lock_arm64.exe"), "new arm64");
         assert_eq!(read("LICENSE"), "new licence");
         assert_eq!(read("README.md"), "new readme");
         assert_eq!(read("notes.txt"), "mine");
@@ -477,7 +514,13 @@ mod tests {
         names.sort();
         assert_eq!(
             names,
-            ["LICENSE", "README.md", "notes.txt", "overlay-lock.exe"]
+            [
+                "LICENSE",
+                "README.md",
+                "notes.txt",
+                "overlay-lock_arm64.exe",
+                "overlay-lock_x64.exe"
+            ]
         );
         let _ = fs::remove_dir_all(&root);
     }
@@ -506,9 +549,9 @@ mod tests {
         assert_eq!(
             names,
             [
-                "overlay-lock-x64.exe",
-                "overlay-lock-x86.exe",
-                "overlay-lock-arm64.exe"
+                "overlay-lock_x64.exe",
+                "overlay-lock_x86.exe",
+                "overlay-lock_arm64.exe"
             ]
         );
     }
@@ -530,7 +573,7 @@ mod tests {
         fs::write(&exe, "exe").expect("written");
         let zip = out.join("test.zip");
 
-        package(&root, &exe, "overlay-lock-x64.exe", &zip).expect("the zip is written");
+        package(&root, &exe, "overlay-lock_x64.exe", &zip).expect("the zip is written");
 
         let system_root = std::env::var_os("SystemRoot").expect("SystemRoot is set");
         let listing = std::process::Command::new(
@@ -548,7 +591,7 @@ mod tests {
             .map(ToString::to_string)
             .collect();
         entries.sort();
-        assert_eq!(entries, ["LICENSE", "README.md", "overlay-lock-x64.exe"]);
+        assert_eq!(entries, ["LICENSE", "README.md", "overlay-lock_x64.exe"]);
         let renamed = std::process::Command::new(
             std::path::Path::new(&system_root)
                 .join("System32")
@@ -556,7 +599,7 @@ mod tests {
         )
         .args(["-x", "-O", "-f"])
         .arg(&zip)
-        .arg("overlay-lock-x64.exe")
+        .arg("overlay-lock_x64.exe")
         .output()
         .expect("tar extracts the executable");
         assert_eq!(

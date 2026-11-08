@@ -27,8 +27,8 @@ computer protected.
 Download the zip for your processor from the
 [releases page](https://github.com/BootBlock/OverlayLock/releases): `x64` for most PCs, `arm64`
 for ARM64 PCs, or `x86` for 32-bit Windows. Unpack it anywhere you like. The program in each zip
-is named for its processor (`overlay-lock-x64.exe`, `overlay-lock-arm64.exe` or
-`overlay-lock-x86.exe`), so all three can share a folder. This README calls it `overlay-lock`:
+is named for its processor (`overlay-lock_x64.exe`, `overlay-lock_arm64.exe` or
+`overlay-lock_x86.exe`), so all three can share a folder. This README calls it `overlay-lock`:
 use your program's name, or rename it. Each release lists the SHA-256 sum of every zip in
 `SHA256SUMS.txt`. The program needs Windows 10 version 1809 or later and nothing else: the
 Visual C++ runtime is built in.
@@ -103,7 +103,7 @@ To lock from a Stream Deck, add a **System > Open** action and set **App / File*
 path of the program followed by its options, for example:
 
 ```text
-"C:\Tools\overlay-lock-x64.exe" --password go --timeout 1h
+"C:\Tools\overlay-lock_x64.exe" --password go --timeout 1h
 ```
 
 OverlayLock takes the focus from whatever window had it, so you can type the password straight
@@ -172,7 +172,7 @@ If you forget the password, these are the ways out, from the gentlest:
 3. **Use Ctrl+Alt+Del.** Windows always shows this screen. With `--yield-on-ctrl-alt-del`, when
    you come back from it (by choosing Cancel or Task Manager), OverlayLock steps back: the hooks
    are removed and the overlay leaves the always-on-top layer, so Task Manager shows above it and
-   takes your input. Choose **Task Manager** there and end OverlayLock (`overlay-lock-x64.exe`,
+   takes your input. Choose **Task Manager** there and end OverlayLock (`overlay-lock_x64.exe`,
    or the name of your copy). Without `--yield-on-ctrl-alt-del`, a Task Manager started this way
    stays hidden behind the overlay and gets no input from `--block-keys` and `--block-mouse`, so
    choose **Sign out** instead; that ends the lock along with everything else in the session.
@@ -202,12 +202,15 @@ others). To build a copy you can run in place, for example from a Stream Deck bu
 cargo xtask dist
 ```
 
-It builds for your processor and puts `overlay-lock.exe`, `LICENSE` and `README.md` in the
-`!Distribution` folder. Each run replaces only those three files, so the path stays the same. End
-any lock running from there first, because Windows cannot replace a running program. Add
+It builds for your processor and puts `overlay-lock_x64.exe` (or `_x86`, or `_arm64`), `LICENSE`
+and `README.md` in the `!Distribution` folder. To install other builds instead, side by side, name
+each one with `--target` (`x64`, `x86` or `arm64`), for example `cargo xtask dist --target x64
+--target x86`. Each run replaces only those files, so each path stays the same. It also removes
+the `overlay-lock.exe` that earlier versions put there, so point any shortcut at the new name.
+End any lock running from there first, because Windows cannot replace a running program. Add
 `--zip <folder>` to write the zips a release publishes (`x64`, `x86`, `arm64` and
 `SHA256SUMS.txt`) into that folder instead; each zip names the program for its processor, such
-as `overlay-lock-x64.exe`.
+as `overlay-lock_x64.exe`.
 
 The icon is generated, not drawn: to render it again from the Segoe Fluent Icons glyph, run:
 

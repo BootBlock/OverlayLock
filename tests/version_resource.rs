@@ -48,7 +48,7 @@ fn original_filename_is_the_release_zip_name_for_this_processor() {
     };
     assert_eq!(
         version_string(&image, "OriginalFilename").as_deref(),
-        Some(format!("overlay-lock-{cpu}.exe").as_str())
+        Some(format!("overlay-lock_{cpu}.exe").as_str())
     );
 }
 

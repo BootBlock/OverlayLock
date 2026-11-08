@@ -26,8 +26,8 @@ const TARGETS: [Target; 3] = [
     },
 ];
 
-/// Gets the file name of a target's executable in its release zip, such as
-/// `overlay-lock-x64.exe`.
+/// Gets the file name of a target's executable, in its release zip and in `!Distribution\`, such
+/// as `overlay-lock_x64.exe`.
 fn exe_name(target: Target) -> String {
-    format!("overlay-lock-{}.exe", target.name)
+    format!("overlay-lock_{}.exe", target.name)
 }
