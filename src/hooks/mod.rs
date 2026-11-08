@@ -9,7 +9,7 @@ use std::cell::Cell;
 use std::sync::mpsc;
 use std::thread::{self, JoinHandle};
 
-use windows::Win32::Foundation::{E_FAIL, HINSTANCE, HWND, LPARAM, WPARAM};
+use windows::Win32::Foundation::{E_FAIL, HINSTANCE, LPARAM, WPARAM};
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::System::Threading::{
     GetCurrentThread, GetCurrentThreadId, SetThreadPriority, THREAD_PRIORITY_HIGHEST,
@@ -24,7 +24,7 @@ use keyboard::{KEYBOARD, KeyboardConfig, KeyboardState, keyboard_proc};
 use mouse::mouse_proc;
 use translate::KeyTranslator;
 
-use crate::password::PasswordMatcher;
+use crate::overlay::ControllerHandle;
 
 /// Posted to the hook thread: `wParam` 1 passes input on (the session is locked), 0 swallows it.
 const WM_APP_HOOK_PAUSE: u32 = WM_APP + 16;
@@ -50,25 +50,18 @@ pub struct HookConfig {
 /// The running hook thread.
 pub struct HookThread {
     thread_id: u32,
-    handle: JoinHandle<Option<PasswordMatcher>>,
+    handle: JoinHandle<()>,
 }
-
-/// The window handle of the controller, sent to the hook thread.
-struct Controller(HWND);
-
-// SAFETY: a window handle is an opaque value that any thread may pass to `PostMessageW`.
-unsafe impl Send for Controller {}
 
 impl HookThread {
     /// Starts the hook thread and waits until its hooks are installed.
     ///
     /// A hook that cannot be installed is an error, never a silently unhooked lock (OL4).
-    pub fn start(config: HookConfig, controller: HWND) -> windows::core::Result<Self> {
+    pub fn start(config: HookConfig, controller: ControllerHandle) -> windows::core::Result<Self> {
         let (report, installed) = mpsc::channel::<windows::core::Result<u32>>();
-        let controller = Controller(controller);
         let handle = thread::Builder::new()
             .name("overlay-lock-hooks".to_owned())
-            .spawn(move || run(config, &controller, &report))
+            .spawn(move || run(config, controller, &report))
             .map_err(|error| windows::core::Error::new(E_FAIL, error.to_string()))?;
         match installed.recv() {
             Ok(Ok(thread_id)) => Ok(Self { thread_id, handle }),
@@ -101,21 +94,21 @@ impl HookThread {
         let _ = unsafe { PostThreadMessageW(self.thread_id, message, WPARAM(wparam), LPARAM(0)) };
     }
 
-    /// Removes the hooks, ends the thread and gives back the password matcher, if it had one.
-    pub fn stop(self) -> Option<PasswordMatcher> {
+    /// Removes the hooks and ends the thread.
+    pub fn stop(self) {
         // SAFETY: posts `WM_QUIT` to the hook thread, whose message queue exists (made in `run`
         // before it reported success).
         let _ = unsafe { PostThreadMessageW(self.thread_id, WM_QUIT, WPARAM(0), LPARAM(0)) };
-        self.handle.join().ok().flatten()
+        let _ = self.handle.join();
     }
 }
 
 /// The hook thread: installs the hooks, reports, pumps messages until `WM_QUIT`, then unhooks.
 fn run(
     config: HookConfig,
-    controller: &Controller,
+    controller: ControllerHandle,
     report: &mpsc::Sender<windows::core::Result<u32>>,
-) -> Option<PasswordMatcher> {
+) {
     let mut message = MSG::default();
     // SAFETY: plain calls on this thread. `PeekMessageW` makes the thread's message queue, so a
     // `WM_QUIT` posted right after the report below cannot be lost.
@@ -124,11 +117,12 @@ fn run(
         let _ = PeekMessageW(&raw mut message, None, 0, 0, PM_NOREMOVE);
         GetCurrentThreadId()
     };
-    let hooks = match install(config, controller.0) {
+    let hooks = match install(config, controller) {
         Ok(hooks) => hooks,
         Err(error) => {
+            KEYBOARD.take();
             let _ = report.send(Err(error));
-            return KEYBOARD.take().map(KeyboardState::into_matcher);
+            return;
         }
     };
     let _ = report.send(Ok(thread_id));
@@ -148,12 +142,12 @@ fn run(
         }
     }
     unhook(hooks);
-    KEYBOARD.take().map(KeyboardState::into_matcher)
+    KEYBOARD.take();
 }
 
 /// Installs the configured hooks on this thread, the keyboard hook first. On failure, removes those
 /// already installed and returns the first error.
-fn install(config: HookConfig, controller: HWND) -> windows::core::Result<Vec<HHOOK>> {
+fn install(config: HookConfig, controller: ControllerHandle) -> windows::core::Result<Vec<HHOOK>> {
     debug_assert!(
         config.keyboard.is_some() || config.mouse,
         "no hook to install"

@@ -10,6 +10,8 @@ use lexopt::{Arg, Parser, ValueExt};
 use crate::colour::Colour;
 use crate::duration::parse_duration;
 use crate::monitors::Monitors;
+use crate::password::Password;
+use crate::password::hash::PasswordHash;
 
 /// The build date `build.rs` recorded, as `YYYY-MM-DD`.
 const BUILD_DATE: &str = env!("OVERLAY_LOCK_BUILD_DATE");
@@ -76,9 +78,15 @@ Created by Joe Cox - https://bootblock.co.uk
 OverlayLock covers the screen until a password is typed.
 
 Usage: overlay-lock --password <TEXT> [OPTIONS]
+       overlay-lock --password-hash <HASH> [OPTIONS]
+       overlay-lock --make-hash
 
 Options:
-  -p, --password <TEXT>       The password that unlocks. Required, not empty, case-sensitive.
+  -p, --password <TEXT>       The password that unlocks. Not empty, case-sensitive.
+      --password-hash <HASH>  The hash of the password that unlocks, as --make-hash prints
+                              it, so the password itself is not on the command line.
+      --make-hash             Ask for a password, print its hash for --password-hash, and
+                              exit. Reads standard input instead when it is redirected.
       --monitors <all|cursor> Cover every monitor, or only the one under the cursor.
                               [default: all]
       --colour <COLOUR>       The background colour: #RGB, #RRGGBB or a CSS colour name.
@@ -98,10 +106,11 @@ Options:
   -h, --help                  Print this help and exit.
   -V, --version               Print the version and exit.
 
-The --text-colour, --text-size and --font options need --message.
+One of --password and --password-hash is required. The --text-colour, --text-size and
+--font options need --message.
 
 Exit codes:
-  0  Unlocked (or help or version shown)
+  0  Unlocked (or help, the version or a hash shown)
   1  A runtime failure
   2  A usage error
   3  Another instance is already locked";
@@ -127,6 +136,8 @@ pub enum Command {
     Help,
     /// Print the version.
     Version,
+    /// Ask for a password and print its hash.
+    MakeHash,
 }
 
 /// The options of a lock.
@@ -136,8 +147,8 @@ pub enum Command {
     reason = "each field is one independent command-line flag"
 )]
 pub struct Options {
-    /// The password as UTF-16 code units, never empty.
-    pub password: Vec<u16>,
+    /// The password or its hash.
+    pub password: Password,
     /// Which monitors to cover.
     pub monitors: Monitors,
     /// The background colour.
@@ -213,7 +224,7 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Command, UsageE
             }
         }
     }
-    builder.finish().map(Command::Run)
+    builder.finish()
 }
 
 /// The options seen so far, each `None` or `false` until given.
@@ -223,7 +234,11 @@ pub fn parse(args: impl IntoIterator<Item = OsString>) -> Result<Command, UsageE
     reason = "each field is one independent command-line flag"
 )]
 struct Builder {
+    /// The first option given other than `--make-hash`, which takes no other option.
+    first_option: Option<String>,
+    make_hash: bool,
     password: Option<Vec<u16>>,
+    password_hash: Option<PasswordHash>,
     monitors: Option<Monitors>,
     background: Option<Colour>,
     message: Option<String>,
@@ -240,6 +255,10 @@ struct Builder {
 impl Builder {
     /// Reads one option, named as the user typed it, and its value if it takes one.
     fn apply(&mut self, name: &str, parser: &mut Parser) -> Result<(), UsageError> {
+        if name == "--make-hash" {
+            return set_flag(&mut self.make_hash, name);
+        }
+        self.first_option.get_or_insert_with(|| name.to_owned());
         match name {
             "-p" | "--password" => {
                 let value: Vec<u16> = parser.value()?.encode_wide().collect();
@@ -247,6 +266,14 @@ impl Builder {
                     return Err(UsageError::new(name, "the password must not be empty"));
                 }
                 set_once(&mut self.password, value, name)
+            }
+            "--password-hash" => {
+                let value = parser.value()?.string()?;
+                let hash = value
+                    .trim()
+                    .parse()
+                    .map_err(|reason| UsageError::new(name, reason))?;
+                set_once(&mut self.password_hash, hash, name)
             }
             "--monitors" => {
                 let value = parser.value()?.string()?;
@@ -302,10 +329,33 @@ impl Builder {
     }
 
     /// Checks the options together and fills in the defaults.
-    fn finish(self) -> Result<Options, UsageError> {
-        let password = self
-            .password
-            .ok_or_else(|| UsageError::new("--password", "the password is required"))?;
+    fn finish(self) -> Result<Command, UsageError> {
+        if self.make_hash {
+            return match self.first_option {
+                Some(option) => Err(UsageError::new(
+                    "--make-hash",
+                    format!("takes no other option, but {option} was given"),
+                )),
+                None => Ok(Command::MakeHash),
+            };
+        }
+        let password = match (self.password, self.password_hash) {
+            (Some(units), None) => Password::Plain(units),
+            (None, Some(hash)) => Password::Hash(hash),
+            (Some(_), Some(_)) => {
+                return Err(UsageError::new(
+                    "--password-hash",
+                    "give --password or --password-hash, not both",
+                ));
+            }
+            (None, None) => {
+                return Err(UsageError::new(
+                    "--password",
+                    "the password is required: give --password, or --password-hash with the \
+                     hash --make-hash prints",
+                ));
+            }
+        };
         let message = if let Some(text) = self.message {
             Some(MessageStyle {
                 text,
@@ -326,7 +376,7 @@ impl Builder {
             }
             None
         };
-        Ok(Options {
+        Ok(Command::Run(Options {
             password,
             monitors: self.monitors.unwrap_or_default(),
             background: self.background.unwrap_or(DEFAULT_BACKGROUND),
@@ -336,7 +386,7 @@ impl Builder {
             timeout: self.timeout,
             alt_f4_unlocks: !self.ignore_alt_f4,
             yield_on_ctrl_alt_del: self.yield_on_ctrl_alt_del,
-        })
+        }))
     }
 }
 
@@ -427,6 +477,8 @@ mod tests {
     use super::{Command, MessageStyle, Options, UsageError, parse};
     use crate::colour::Colour;
     use crate::monitors::Monitors;
+    use crate::password::Password;
+    use crate::password::hash::PasswordHash;
     use std::ffi::OsString;
     use std::os::windows::ffi::OsStringExt;
     use std::time::Duration;
@@ -453,12 +505,20 @@ mod tests {
         text.encode_utf16().collect()
     }
 
+    fn plain(text: &str) -> Password {
+        Password::Plain(utf16(text))
+    }
+
+    /// A valid hash text: 1,000 iterations of a two-unit password, any salt and hash bytes.
+    const HASH: &str = "pbkdf2-sha256:1000:2:AAAAAAAAAAAAAAAAAAAAAA:\
+                        AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+
     #[test]
     fn defaults() {
         assert_eq!(
             options(&["-p", "go"]),
             Options {
-                password: utf16("go"),
+                password: plain("go"),
                 monitors: Monitors::All,
                 background: Colour::hex(0x00_0000),
                 message: None,
@@ -498,7 +558,7 @@ mod tests {
         assert_eq!(
             parsed,
             Options {
-                password: utf16("Secret 1"),
+                password: plain("Secret 1"),
                 monitors: Monitors::Cursor,
                 background: Colour::hex(0x10_2030),
                 message: Some(MessageStyle {
@@ -549,8 +609,8 @@ mod tests {
 
     #[test]
     fn equals_form_and_short_attached_form() {
-        assert_eq!(options(&["--password=go"]).password, utf16("go"));
-        assert_eq!(options(&["-pgo"]).password, utf16("go"));
+        assert_eq!(options(&["--password=go"]).password, plain("go"));
+        assert_eq!(options(&["-pgo"]).password, plain("go"));
     }
 
     #[test]
@@ -559,7 +619,7 @@ mod tests {
         let units = vec![0xD800, u16::from(b'x')];
         let args = [OsString::from("-p"), OsString::from_wide(&units)];
         match parse(args) {
-            Ok(Command::Run(options)) => assert_eq!(options.password, units),
+            Ok(Command::Run(options)) => assert_eq!(options.password, Password::Plain(units)),
             other => panic!("{other:?}"),
         }
     }
@@ -576,6 +636,62 @@ mod tests {
     fn missing_password() {
         assert!(error(&[]).starts_with("--password:"));
         assert!(error(&["--block-keys"]).starts_with("--password:"));
+    }
+
+    #[test]
+    fn password_hash_stands_in_for_the_password() {
+        let parsed = options(&["--password-hash", HASH, "--block-keys"]);
+        assert_eq!(
+            parsed.password,
+            Password::Hash(HASH.parse::<PasswordHash>().unwrap())
+        );
+        assert!(parsed.block_keys);
+        let padded = format!("--password-hash= {HASH} ");
+        assert_eq!(options(&[&padded]).password, parsed.password);
+    }
+
+    #[test]
+    fn password_and_password_hash_together() {
+        assert_eq!(
+            error(&["-p", "go", "--password-hash", HASH]),
+            "--password-hash: give --password or --password-hash, not both"
+        );
+    }
+
+    #[test]
+    fn missing_password_names_both_ways_to_give_it() {
+        let message = error(&["--timeout", "1s"]);
+        assert!(message.contains("--password-hash"), "{message}");
+        assert!(message.contains("--make-hash"), "{message}");
+    }
+
+    #[test]
+    fn bad_password_hash_names_the_option_and_the_part() {
+        assert!(
+            error(&["--password-hash", "go"]).starts_with("--password-hash: not a password hash")
+        );
+        assert!(
+            error(&["--password-hash", &HASH.replace(":1000:", ":10:")])
+                .starts_with("--password-hash: the iteration count")
+        );
+        assert!(
+            error(&["--password-hash", HASH, "--password-hash", HASH]).contains("more than once")
+        );
+    }
+
+    #[test]
+    fn make_hash_stands_alone() {
+        assert_eq!(run(&["--make-hash"]), Ok(Command::MakeHash));
+        assert_eq!(
+            error(&["--make-hash", "-p", "go"]),
+            "--make-hash: takes no other option, but -p was given"
+        );
+        assert_eq!(
+            error(&["--timeout", "1s", "--make-hash"]),
+            "--make-hash: takes no other option, but --timeout was given"
+        );
+        assert!(error(&["--make-hash", "--make-hash"]).contains("more than once"));
+        assert!(error(&["--make-hash=yes"]).contains("--make-hash"));
     }
 
     #[test]
@@ -683,6 +799,8 @@ mod tests {
     fn help_lists_every_option() {
         for option in [
             "--password",
+            "--password-hash",
+            "--make-hash",
             "--monitors",
             "--colour",
             "--color",

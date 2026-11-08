@@ -10,7 +10,7 @@ use std::time::Duration;
 use common::input::{
     EditWindow, click_and_scroll, cursor, move_mouse, send_key, type_keys, type_unicode,
 };
-use common::{Lock, post_text, serial};
+use common::{Lock, make_hash, post_text, serial};
 use windows::Win32::UI::Input::KeyboardAndMouse::{VIRTUAL_KEY, VK_F4, VK_LMENU};
 
 const G: VIRTUAL_KEY = VIRTUAL_KEY(b'G' as u16);
@@ -41,6 +41,28 @@ fn typed_password_unlocks() {
     let mut lock = Lock::start(&KEYS);
     lock.overlay();
     type_keys(&[X, G, O]);
+    assert_eq!(lock.exit_code_within(Duration::from_secs(2)), Some(0));
+}
+
+#[test]
+#[ignore = "takes over the keyboard; run by hand"]
+fn typed_password_unlocks_a_hashed_lock() {
+    let _serial = serial();
+    let hash = make_hash("go");
+    let mut lock = Lock::start(&[
+        "--password-hash",
+        &hash,
+        "--block-keys",
+        "--monitors",
+        "cursor",
+        "--timeout",
+        "20s",
+    ]);
+    lock.overlay();
+    type_keys(&[G, X, G]);
+    sleep(Duration::from_millis(500));
+    assert!(lock.is_running(), "'gxg' must not unlock the hash of 'go'");
+    type_keys(&[O]);
     assert_eq!(lock.exit_code_within(Duration::from_secs(2)), Some(0));
 }
 

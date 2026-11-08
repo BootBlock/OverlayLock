@@ -1,6 +1,10 @@
 //! Runs the built executable with help, version and usage-error command lines.
 
-use std::process::{Command, Output};
+mod common;
+
+use std::process::{Command, Output, Stdio};
+
+use common::{make_hash, run_make_hash};
 
 fn run(args: &[&str]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_overlay-lock"))
@@ -35,6 +39,54 @@ fn version_prints_the_crate_version() {
     let output = run(&["--version"]);
     assert_eq!(output.status.code(), Some(0));
     assert!(String::from_utf8_lossy(&output.stdout).contains(env!("CARGO_PKG_VERSION")));
+}
+
+#[test]
+fn make_hash_prints_one_line_in_the_documented_form() {
+    let hash = make_hash("Purr 42");
+    let fields: Vec<&str> = hash.split(':').collect();
+    assert_eq!(fields.len(), 5, "{hash}");
+    assert_eq!(fields[0], "pbkdf2-sha256");
+    assert_eq!(fields[1], "5000");
+    assert_eq!(fields[2], "7", "the length of Purr 42 in UTF-16 units");
+    assert!(!hash.contains('\n'));
+    assert_ne!(make_hash("Purr 42"), hash, "each hash has its own salt");
+}
+
+#[test]
+fn make_hash_with_empty_input_fails_with_1() {
+    let output = run_make_hash(b"\n");
+    assert_eq!(output.status.code(), Some(1));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("must not be empty"), "stderr: {stderr}");
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "");
+}
+
+#[test]
+fn make_hash_with_null_input_fails_with_1_and_opens_no_console() {
+    let output = Command::new(env!("CARGO_BIN_EXE_overlay-lock"))
+        .arg("--make-hash")
+        .stdin(Stdio::null())
+        .output()
+        .expect("the executable starts");
+    assert_eq!(output.status.code(), Some(1));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("must not be empty"));
+}
+
+#[test]
+fn make_hash_with_another_option_is_a_usage_error() {
+    let output = run(&["--make-hash", "-p", "go"]);
+    assert_eq!(output.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("--make-hash"));
+}
+
+#[test]
+fn a_malformed_password_hash_is_a_usage_error() {
+    let output = run(&["--password-hash", "pbkdf2-sha256:5000:2:abc"]);
+    assert_eq!(output.status.code(), Some(2));
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("--password-hash: not a password hash")
+    );
 }
 
 /// A console program makes a shell wait for it, so its text and exit code arrive in order; the

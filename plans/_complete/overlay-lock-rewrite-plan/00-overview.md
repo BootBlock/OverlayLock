@@ -111,10 +111,28 @@ process command line, and a config file comes in a later plan.
   (all 148, case-insensitive). Repeating an option, an unknown option, a positional argument or an
   out-of-range value is a usage error that names the option. Message options without `--message`
   are a usage error.
+  *Amended on 2026-11-08 for issue #2:* `-p` is no longer the only way to give the password.
+  `--password-hash <HASH>` takes `pbkdf2-sha256:<iterations>:<length>:<salt>:<hash>` (unpadded
+  standard Base64; PBKDF2-HMAC-SHA256 of the UTF-16LE units; 1,000 to 100,000 iterations, length 1
+  to 1,024 units, salt 16 to 64 bytes, hash 32 bytes). Colons separate the fields because shells
+  expand `$` inside double quotes. Exactly one of `-p` and `--password-hash` is required.
+  `--make-hash` takes no other option: it reads the password (twice, echo off, from a console on
+  standard input; else from redirected standard input as UTF-8, one trailing line break dropped;
+  else from a console it opens, which shows the hash until Enter), prints the hash with 5,000
+  iterations and a 16-byte random salt, and exits `0`, or `1` on a failure. PBKDF2 and the salt
+  come from CNG (`windows` feature `Win32_Security_Cryptography`), so no crate is added.
 - **OL6 Password match.** The password is stored as UTF-16 code units. A fixed ring of the last N
   code units (N = password length, allocated once) is compared against the password after each
   unit. Case-sensitive. Every character counts, as in Lite. No allocation per key. One type,
   `PasswordMatcher`, serves both the window path and the hook path.
+  *Amended on 2026-11-08 for issue #2:* with `--password-hash`, N is the hash's length field, and
+  each unit after the first N hashes the ring (oldest first, into a buffer allocated once) and
+  compares in constant time. A hash takes milliseconds and Windows removes a low-level hook whose
+  callback passes `LowLevelHooksTimeout`, so the matcher, plain or hashed, now runs on one match
+  thread (`src/password/worker.rs`). The hook and `WM_CHAR` send it units through a bounded queue
+  (`try_send`: never blocks, never allocates). A unit lost to a full queue restarts the match at
+  the next unit, so units on either side of the loss never join. The match thread posts the unlock
+  message to the controller. The yield (OL15) clears the match instead of moving the matcher back.
 - **OL7 Overlay windows.** One `WS_POPUP` window per covered monitor, `WS_EX_TOPMOST |
   WS_EX_TOOLWINDOW` (not in the taskbar or Alt+Tab), sized to `rcMonitor`. Monitors are identified
   by `MONITORINFOEXW.szDevice`. On `WM_DISPLAYCHANGE` the set is reconciled: windows move and resize
@@ -140,7 +158,7 @@ process command line, and a config file comes in a later plan.
 - **OL11 Keyboard hook.** `--block-keys` installs `WH_KEYBOARD_LL` on a dedicated hook thread with
   its own message loop at `THREAD_PRIORITY_HIGHEST`. It swallows every key event. Key-downs pass
   through its own key state and `ToUnicodeEx` (flag `0x4`, layout of the hook thread at install)
-  into the hook thread's `PasswordMatcher`. A dead key gives no character in hook mode (documented).
+  into the hook thread's `PasswordMatcher` (amended 2026-11-08: to the match thread, OL6). A dead key gives no character in hook mode (documented).
   Injected input (`LLKHF_INJECTED`, e.g. a Stream Deck text action) counts like physical input. On a
   match the hook thread posts an unlock message to the controller window (OL18).
 - **OL12 Mouse hook.** `--block-mouse` installs `WH_MOUSE_LL` on the same hook thread and swallows

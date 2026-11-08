@@ -11,7 +11,8 @@
 
 pub mod input;
 
-use std::process::{Child, Command, Stdio};
+use std::io::Write;
+use std::process::{Child, Command, Output, Stdio};
 use std::sync::{Mutex, MutexGuard};
 use std::thread::sleep;
 use std::time::{Duration, Instant};
@@ -104,6 +105,39 @@ impl Drop for Lock {
             let _ = self.child.wait();
         }
     }
+}
+
+/// Runs `--make-hash` with `input` piped to standard input.
+pub fn run_make_hash(input: &[u8]) -> Output {
+    let mut child = Command::new(env!("CARGO_BIN_EXE_overlay-lock"))
+        .arg("--make-hash")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .expect("the executable starts");
+    child
+        .stdin
+        .take()
+        .expect("standard input is piped")
+        .write_all(input)
+        .expect("the password is written");
+    child.wait_with_output().expect("the process ends")
+}
+
+/// Gets the hash `--make-hash` prints for `password`, given on a line of its own.
+pub fn make_hash(password: &str) -> String {
+    let output = run_make_hash(format!("{password}\r\n").as_bytes());
+    assert_eq!(
+        output.status.code(),
+        Some(0),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    String::from_utf8(output.stdout)
+        .expect("the hash is UTF-8")
+        .trim_end()
+        .to_owned()
 }
 
 /// Posts each UTF-16 unit of `text` to `hwnd` as `WM_CHAR`.
