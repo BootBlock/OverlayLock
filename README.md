@@ -4,6 +4,8 @@
 
 [![CI](https://github.com/BootBlock/OverlayLock/actions/workflows/ci.yml/badge.svg)](https://github.com/BootBlock/OverlayLock/actions/workflows/ci.yml)
 
+[![Release](https://img.shields.io/github/v/release/BootBlock/OverlayLock?label=release)](https://github.com/BootBlock/OverlayLock/releases)
+
 OverlayLock covers your monitors with a plain screen and hides the cursor until you type the
 password you gave it on the command line. It's a small, fast Windows program with no runtime to
 install, made to be started from a Stream Deck button, a shortcut or a script.
@@ -39,7 +41,7 @@ cargo install --git https://github.com/BootBlock/OverlayLock
 This is the output of `overlay-lock --help`:
 
 ```text
-OverlayLock 0.1.0, built on the 8th November 2026
+OverlayLock 0.2.0, built on the 8th November 2026
 Created by Joe Cox - https://bootblock.co.uk
 
 OverlayLock covers the screen until a password is typed.
@@ -209,6 +211,12 @@ Before you send a change, run `cargo fmt --all --check`, `cargo clippy --workspa
 -- -D warnings` and `cargo test --workspace`. The tests in `tests/hooks.rs` take over the keyboard
 and mouse for a few seconds, so they only run when you ask for them:
 `cargo test --test hooks -- --ignored --test-threads=1`.
+
+## Contributing
+
+We're grateful for pull requests, but we're not actively accepting them at the moment. To report a
+bug, ask for a feature or suggest a fix, [open an issue](https://github.com/BootBlock/OverlayLock/issues/new)
+instead. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Author
 
