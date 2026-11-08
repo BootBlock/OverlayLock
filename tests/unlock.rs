@@ -5,7 +5,7 @@ mod common;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
-use common::{Lock, post, post_text, serial};
+use common::{Lock, make_hash, post, post_text, serial};
 use windows::Win32::UI::WindowsAndMessaging::{SC_CLOSE, WM_CLOSE, WM_SYSCOMMAND};
 
 const SAFE: [&str; 6] = ["-p", "go", "--monitors", "cursor", "--timeout", "20s"];
@@ -31,6 +31,26 @@ fn wrong_order_stays_locked() {
     sleep(Duration::from_secs(1));
     assert!(lock.is_running(), "'gx' must not unlock 'go'");
     post_text(overlay, "go");
+    assert_eq!(lock.exit_code_within(Duration::from_secs(2)), Some(0));
+}
+
+#[test]
+fn hashed_password_after_noise_unlocks() {
+    let _serial = serial();
+    let hash = make_hash("go");
+    let mut lock = Lock::start(&[
+        "--password-hash",
+        &hash,
+        "--monitors",
+        "cursor",
+        "--timeout",
+        "20s",
+    ]);
+    let overlay = lock.overlay();
+    post_text(overlay, "gx");
+    sleep(Duration::from_secs(1));
+    assert!(lock.is_running(), "'gx' must not unlock the hash of 'go'");
+    post_text(overlay, "xgo");
     assert_eq!(lock.exit_code_within(Duration::from_secs(2)), Some(0));
 }
 

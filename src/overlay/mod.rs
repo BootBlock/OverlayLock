@@ -7,18 +7,41 @@ use std::cell::RefCell;
 
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{
-    CREATESTRUCTW, DefWindowProcW, GWLP_USERDATA, GetWindowLongPtrW, SetWindowLongPtrW, WM_APP,
-    WM_NCCREATE, WM_NCDESTROY,
+    CREATESTRUCTW, DefWindowProcW, GWLP_USERDATA, GetWindowLongPtrW, PostMessageW,
+    SetWindowLongPtrW, WM_APP, WM_NCCREATE, WM_NCDESTROY,
 };
 
 use crate::monitors::{MonitorId, Rect};
 
-/// Posted to the controller to unlock, by the UI thread or the hook thread. Every cause (the
-/// password, Alt+F4, the timeout, the end of the session) ends the lock the same way.
+/// Posted to the controller to unlock, by the UI thread, the hook thread (Alt+F4) or the match
+/// thread (the password). Every cause (the password, Alt+F4, the timeout, the end of the session)
+/// ends the lock the same way.
 pub const WM_APP_UNLOCK: u32 = WM_APP + 1;
 
 /// Posted to the controller by an overlay that received `WM_DISPLAYCHANGE`.
 pub const WM_APP_DISPLAY_CHANGED: u32 = WM_APP + 2;
+
+/// The controller window's handle, which the hook thread and the match thread hold so they can
+/// ask it to unlock.
+#[derive(Clone, Copy, Debug)]
+pub struct ControllerHandle(HWND);
+
+// SAFETY: a window handle is an opaque value that any thread may pass to `PostMessageW`.
+unsafe impl Send for ControllerHandle {}
+
+impl ControllerHandle {
+    /// Initialises a new instance of the [`ControllerHandle`] type for the controller window.
+    pub fn new(controller: HWND) -> Self {
+        Self(controller)
+    }
+
+    /// Posts [`WM_APP_UNLOCK`] to the controller. Never blocks, so a hook may call it.
+    pub fn post_unlock(self) {
+        // SAFETY: posting plain integers to a window never blocks; a window that is gone makes
+        // the call fail, which is harmless.
+        let _ = unsafe { PostMessageW(Some(self.0), WM_APP_UNLOCK, WPARAM(0), LPARAM(0)) };
+    }
+}
 
 /// One overlay window and the monitor it covers.
 #[derive(Clone, Debug)]

@@ -1,25 +1,25 @@
 //! The `WH_KEYBOARD_LL` procedure. It swallows every key event and feeds key-downs through the
-//! hook thread's [`KeyTranslator`] into its [`PasswordMatcher`].
+//! hook thread's [`KeyTranslator`] to the match thread.
 //!
 //! The procedure never allocates and never blocks: Windows removes a hook silently when its
-//! callback is slow. Its only cross-thread call is `PostMessageW` to the controller.
+//! callback is slow. Its only cross-thread calls are a non-blocking send to the match thread and
+//! `PostMessageW` to the controller.
 
 use std::cell::RefCell;
 
-use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
+use windows::Win32::Foundation::{LPARAM, LRESULT, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{
-    CallNextHookEx, HC_ACTION, KBDLLHOOKSTRUCT, PostMessageW, WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN,
-    WM_SYSKEYUP,
+    CallNextHookEx, HC_ACTION, KBDLLHOOKSTRUCT, WM_KEYDOWN, WM_KEYUP, WM_SYSKEYDOWN, WM_SYSKEYUP,
 };
 
 use super::translate::{KeyOutcome, KeyTranslator};
-use crate::overlay::WM_APP_UNLOCK;
-use crate::password::PasswordMatcher;
+use crate::overlay::ControllerHandle;
+use crate::password::worker::UnitSender;
 
 /// What the keyboard hook needs, moved onto the hook thread.
 pub struct KeyboardConfig {
-    /// The password matcher, taken out of the app for the life of the hook (OL6).
-    pub matcher: PasswordMatcher,
+    /// Feeds typed units to the match thread (OL6).
+    pub units: UnitSender,
     /// `true` if Alt+F4 unlocks; otherwise, `false`.
     pub alt_f4_unlocks: bool,
 }
@@ -27,17 +27,21 @@ pub struct KeyboardConfig {
 /// The keyboard hook's state on the hook thread.
 pub struct KeyboardState {
     translator: KeyTranslator,
-    matcher: PasswordMatcher,
-    controller: HWND,
+    units: UnitSender,
+    controller: ControllerHandle,
     alt_f4_unlocks: bool,
 }
 
 impl KeyboardState {
     /// Initialises a new instance of the [`KeyboardState`] type.
-    pub fn new(config: KeyboardConfig, translator: KeyTranslator, controller: HWND) -> Self {
+    pub fn new(
+        config: KeyboardConfig,
+        translator: KeyTranslator,
+        controller: ControllerHandle,
+    ) -> Self {
         Self {
             translator,
-            matcher: config.matcher,
+            units: config.units,
             controller,
             alt_f4_unlocks: config.alt_f4_unlocks,
         }
@@ -46,11 +50,6 @@ impl KeyboardState {
     /// Reloads the held keys after a visit to another desktop.
     pub fn resync(&mut self) {
         self.translator.resync_held_keys();
-    }
-
-    /// Gives the password matcher back when the hook ends.
-    pub fn into_matcher(self) -> PasswordMatcher {
-        self.matcher
     }
 
     /// Applies one key event. While `paused`, it only keeps the key state in step.
@@ -65,22 +64,15 @@ impl KeyboardState {
             KeyOutcome::Nothing => {}
             KeyOutcome::AltF4 => {
                 if self.alt_f4_unlocks {
-                    self.unlock();
+                    self.controller.post_unlock();
                 }
             }
             KeyOutcome::Typed { units, len } => {
                 for &unit in &units[..len] {
-                    if self.matcher.push(unit) {
-                        self.unlock();
-                    }
+                    self.units.push(unit);
                 }
             }
         }
-    }
-
-    fn unlock(&self) {
-        // SAFETY: posting plain integers to the controller window never blocks.
-        let _ = unsafe { PostMessageW(Some(self.controller), WM_APP_UNLOCK, WPARAM(0), LPARAM(0)) };
     }
 }
 

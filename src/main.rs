@@ -1,5 +1,5 @@
 //! OverlayLock covers the screen with a borderless, topmost overlay and hides the cursor until the
-//! password given on the command line is typed.
+//! password given on the command line, or the password whose hash was given, is typed.
 
 mod app;
 mod cli;
@@ -8,6 +8,7 @@ mod duration;
 mod focus;
 mod hooks;
 mod instance;
+mod make_hash;
 mod monitors;
 mod overlay;
 mod password;
@@ -45,6 +46,7 @@ fn run() -> ExitStatus {
             );
             ExitStatus::Unlocked
         }
+        Ok(Command::MakeHash) => make_hash::run(),
         Ok(Command::Run(options)) => lock(options),
         Err(error) => {
             report(

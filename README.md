@@ -7,7 +7,7 @@
 [![Release](https://img.shields.io/github/v/release/BootBlock/OverlayLock?label=release)](https://github.com/BootBlock/OverlayLock/releases)
 
 OverlayLock covers your monitors with a plain screen and hides the cursor until you type the
-password you gave it on the command line. It's a small, fast Windows program with no runtime to
+password you gave it on the command line (or the password whose hash you gave it). It's a small, fast Windows program with no runtime to
 install, made to be started from a Stream Deck button, a shortcut or a script.
 
 - **Keeps the keyboard and the screen to yourself.** A child, a cat or a passer-by sees a plain
@@ -26,8 +26,10 @@ want dark while you step away, or a message such as "Back in five minutes". You 
 and the screen comes back.
 
 It is not a security tool, and it doesn't replace Win+L. The password is part of the command line,
-which any program running as the same user can read. Ctrl+Alt+Del and Win+L always work, because
-Windows never passes them to an application, and from the Ctrl+Alt+Del screen anyone at the
+which any program running as the same user can read, unless you give its hash instead (see
+[Keeping the password off the command line](#keeping-the-password-off-the-command-line)), and
+anyone who reads the hash can still test guesses against it. Ctrl+Alt+Del and Win+L always work,
+because Windows never passes them to an application, and from the Ctrl+Alt+Del screen anyone at the
 keyboard can start Task Manager or sign out. Use the Windows lock screen when you need the
 computer protected.
 
@@ -59,9 +61,15 @@ Created by Joe Cox - https://bootblock.co.uk
 OverlayLock covers the screen until a password is typed.
 
 Usage: overlay-lock --password <TEXT> [OPTIONS]
+       overlay-lock --password-hash <HASH> [OPTIONS]
+       overlay-lock --make-hash
 
 Options:
-  -p, --password <TEXT>       The password that unlocks. Required, not empty, case-sensitive.
+  -p, --password <TEXT>       The password that unlocks. Not empty, case-sensitive.
+      --password-hash <HASH>  The hash of the password that unlocks, as --make-hash prints
+                              it, so the password itself is not on the command line.
+      --make-hash             Ask for a password, print its hash for --password-hash, and
+                              exit. Reads standard input instead when it is redirected.
       --monitors <all|cursor> Cover every monitor, or only the one under the cursor.
                               [default: all]
       --colour <COLOUR>       The background colour: #RGB, #RRGGBB or a CSS colour name.
@@ -81,10 +89,11 @@ Options:
   -h, --help                  Print this help and exit.
   -V, --version               Print the version and exit.
 
-The --text-colour, --text-size and --font options need --message.
+One of --password and --password-hash is required. The --text-colour, --text-size and
+--font options need --message.
 
 Exit codes:
-  0  Unlocked (or help or version shown)
+  0  Unlocked (or help, the version or a hash shown)
   1  A runtime failure
   2  A usage error
   3  Another instance is already locked
@@ -98,7 +107,8 @@ Started from a terminal, OverlayLock prints there and the terminal waits until t
 script can read the exit code (`$LASTEXITCODE` in PowerShell, `%ERRORLEVEL%` in Command Prompt).
 Started from a shortcut or a Stream Deck button, it opens no console window, and help or an error
 shows in a message box instead. (Before Windows 11 24H2, a console window may flash for a moment
-at start-up.)
+at start-up.) The one exception is `--make-hash`, which opens a console window to ask for the
+password.
 
 ### Examples
 
@@ -147,6 +157,48 @@ To show a message on a dark blue screen:
 ```powershell
 overlay-lock -p go --colour "#102030" --message "Locked\nBack in five minutes" --text-colour gold --text-size 48
 ```
+
+### Keeping the password off the command line
+
+With `--password`, the password is part of the command line, where any program running as you can
+read it, and a shortcut or a Stream Deck button stores it as plain text. `--password-hash` takes a
+hash of the password instead, so the password itself is written nowhere. OverlayLock makes the
+hash for you:
+
+```powershell
+overlay-lock --make-hash
+```
+
+It asks for the password twice without showing it, then prints the hash, for example:
+
+```text
+pbkdf2-sha256:5000:7:U8pMjnpgHoavyxnDexgmag:qCm3d1ABg18g08ncUJ2dHCyLTZT3zPwCS2EB8bI9rf0
+```
+
+Give that text to `--password-hash` in place of `--password`, and type the password to unlock as
+usual:
+
+```powershell
+overlay-lock --password-hash pbkdf2-sha256:5000:7:U8pMjnpgHoavyxnDexgmag:qCm3d1ABg18g08ncUJ2dHCyLTZT3zPwCS2EB8bI9rf0 --timeout 30m
+```
+
+That hash is of `Purr 42`, so make your own rather than copying it. Each run gives a different
+hash, even for the same password, and every one of them works.
+
+**Try it before you rely on it.** Start a lock with the new hash and a short timeout, such as
+`--timeout 1m`, and check that typing the password unlocks it. If it doesn't, the timeout ends
+the lock and you can make the hash again.
+
+- **From a shortcut or the Run dialog**, `--make-hash` opens a console window for the questions
+  and keeps the hash on screen until you press Enter, so you can copy it.
+- **From a script**, pipe the password in instead, and `--make-hash` reads it without asking:
+  `'Purr 42' | overlay-lock --make-hash`. A line break at the end is dropped.
+- **What the hash gives away.** It shows how many characters the password has, and anyone who
+  reads it can test guesses against it, so a short or common password can be found that way. It
+  keeps the password from a glance at the command line; choose a longer password if the hash may
+  be seen.
+- A hashed password can be up to 1,024 characters (UTF-16 code units) long. Typing it works
+  exactly as with `--password`.
 
 ## Behaviour
 

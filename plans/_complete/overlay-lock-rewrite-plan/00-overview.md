@@ -89,11 +89,16 @@ process command line, and a config file comes in a later plan.
   `report::release_console_made_for_us` frees it at once when this process is its only user (a
   brief flash). The sinks are now the standard handle, then a `MessageBoxW`; the
   `AttachConsole` sink went, as a console program inherits its shell's console.
+  *Amended on 2026-11-08 for issue #2:* `--make-hash` started with no standard input (from a
+  shortcut or the Run dialog) opens a console of its own with `AllocConsole` for its prompts, and
+  keeps the hash on screen until Enter (OL5).
 - **OL5 Command line.** Exactly these options, parsed in `src/cli.rs`:
 
   | Option | Value | Default |
   |---|---|---|
-  | `-p`, `--password <TEXT>` | required, non-empty | none: usage error |
+  | `-p`, `--password <TEXT>` | non-empty; this or `--password-hash` is required | none: usage error |
+  | `--password-hash <HASH>` | the hash `--make-hash` prints | none |
+  | `--make-hash` | ask for a password, print its hash, exit; takes no other option | |
   | `--monitors <all\|cursor>` | which monitors to cover | `all` |
   | `--colour <COLOUR>` (alias `--color`) | background | `black` |
   | `--message <TEXT>` | centred text; `\n` is a line break, `\\` a backslash | none |
@@ -111,10 +116,28 @@ process command line, and a config file comes in a later plan.
   (all 148, case-insensitive). Repeating an option, an unknown option, a positional argument or an
   out-of-range value is a usage error that names the option. Message options without `--message`
   are a usage error.
+  *Amended on 2026-11-08 for issue #2:* `-p` is no longer the only way to give the password.
+  `--password-hash <HASH>` takes `pbkdf2-sha256:<iterations>:<length>:<salt>:<hash>` (unpadded
+  standard Base64; PBKDF2-HMAC-SHA256 of the UTF-16LE units; 1,000 to 100,000 iterations, length 1
+  to 1,024 units, salt 16 to 64 bytes, hash 32 bytes). Colons separate the fields because shells
+  expand `$` inside double quotes. Exactly one of `-p` and `--password-hash` is required.
+  `--make-hash` takes no other option: it reads the password (twice, echo off, from a console on
+  standard input; else from redirected standard input as UTF-8, one trailing line break dropped;
+  else from a console it opens, which shows the hash until Enter), prints the hash with 5,000
+  iterations and a 16-byte random salt, and exits `0`, or `1` on a failure. PBKDF2 and the salt
+  come from CNG (`windows` feature `Win32_Security_Cryptography`), so no crate is added.
 - **OL6 Password match.** The password is stored as UTF-16 code units. A fixed ring of the last N
   code units (N = password length, allocated once) is compared against the password after each
   unit. Case-sensitive. Every character counts, as in Lite. No allocation per key. One type,
   `PasswordMatcher`, serves both the window path and the hook path.
+  *Amended on 2026-11-08 for issue #2:* with `--password-hash`, N is the hash's length field, and
+  each unit after the first N hashes the ring (oldest first, into a buffer allocated once) and
+  compares in constant time. A hash takes milliseconds and Windows removes a low-level hook whose
+  callback passes `LowLevelHooksTimeout`, so the matcher, plain or hashed, now runs on one match
+  thread (`src/password/worker.rs`). The hook and `WM_CHAR` send it units through a bounded queue
+  (`try_send`: never blocks, never allocates). A unit lost to a full queue restarts the match at
+  the next unit, so units on either side of the loss never join. The match thread posts the unlock
+  message to the controller. The yield (OL15) clears the match instead of moving the matcher back.
 - **OL7 Overlay windows.** One `WS_POPUP` window per covered monitor, `WS_EX_TOPMOST |
   WS_EX_TOOLWINDOW` (not in the taskbar or Alt+Tab), sized to `rcMonitor`. Monitors are identified
   by `MONITORINFOEXW.szDevice`. On `WM_DISPLAYCHANGE` the set is reconciled: windows move and resize
@@ -143,6 +166,8 @@ process command line, and a config file comes in a later plan.
   into the hook thread's `PasswordMatcher`. A dead key gives no character in hook mode (documented).
   Injected input (`LLKHF_INJECTED`, e.g. a Stream Deck text action) counts like physical input. On a
   match the hook thread posts an unlock message to the controller window (OL18).
+  *Amended on 2026-11-08 for issue #2:* the characters go to the match thread (OL6), which posts
+  the unlock message on a match. The hook thread posts it itself only for Alt+F4 (OL13).
 - **OL12 Mouse hook.** `--block-mouse` installs `WH_MOUSE_LL` on the same hook thread and swallows
   every mouse event, movement included. Each flag works alone or with the other.
 - **OL13 Alt+F4.** Alt+F4 unlocks in both modes unless `--ignore-alt-f4` is given. In focus mode the
@@ -163,7 +188,8 @@ process command line, and a config file comes in a later plan.
 - **OL17 Fail open.** `panic = "abort"`. A crash ends the process, and Windows then removes the hooks
   and the windows: a fault unlocks. Nothing restarts the app.
 - **OL18 Structure.** A message-only controller window (`HWND_MESSAGE`) owns the timers, receives
-  the unlock message from the hook thread and drives exit. One module per responsibility (stage 01
+  the unlock message from the hook thread (amended 2026-11-08: and from the match thread, OL6) and
+  drives exit. One module per responsibility (stage 01
   lists them). `unsafe` stays in the Win32 modules, each block with a `// SAFETY:` comment.
   Window state is reached through `GWLP_USERDATA`. Never hold a `RefCell` borrow across a Win32
   call that can send a message (`DestroyWindow`, `SetWindowPos`, `SetForegroundWindow`), because

@@ -1,5 +1,5 @@
-//! The state of one lock: the options, the password matcher, the overlay windows and the
-//! controller window, and the single path that unlocks.
+//! The state of one lock: the options, the match thread, the overlay windows and the controller
+//! window, and the single path that unlocks.
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -18,9 +18,10 @@ use crate::hooks::keyboard::KeyboardConfig;
 use crate::hooks::{HookConfig, HookThread};
 use crate::monitors::{self, Change, MonitorId, Monitors};
 use crate::overlay::{
-    Overlay, OverlaySet, WM_APP_DISPLAY_CHANGED, WM_APP_UNLOCK, controller, window,
+    ControllerHandle, Overlay, OverlaySet, WM_APP_DISPLAY_CHANGED, WM_APP_UNLOCK, controller,
+    window,
 };
-use crate::password::PasswordMatcher;
+use crate::password::worker::MatchThread;
 use crate::render::TextRenderer;
 use crate::secure_desktop::{Action, SasDetector, SecureDesktopWatch, Signal};
 
@@ -43,7 +44,8 @@ pub struct App {
     instance: HINSTANCE,
     /// The message renderer, made only when `--message` is given (OL8).
     text: Option<TextRenderer>,
-    matcher: RefCell<Option<PasswordMatcher>>,
+    /// The thread that matches typed units against the password (OL6), from start to teardown.
+    matching: RefCell<Option<MatchThread>>,
     overlays: OverlaySet,
     /// The monitor under the cursor at start. With `--monitors cursor`, the covered monitor.
     kept: RefCell<Option<MonitorId>>,
@@ -70,7 +72,6 @@ impl App {
     pub fn new(options: Options) -> windows::core::Result<Self> {
         // SAFETY: `None` asks for the handle of the executable itself, which needs no release.
         let instance: HINSTANCE = unsafe { GetModuleHandleW(None) }?.into();
-        let matcher = PasswordMatcher::new(options.password.clone());
         let text = options
             .message
             .as_ref()
@@ -80,7 +81,7 @@ impl App {
             options,
             instance,
             text,
-            matcher: RefCell::new(Some(matcher)),
+            matching: RefCell::new(None),
             overlays: OverlaySet::default(),
             kept: RefCell::new(None),
             controller: Cell::new(None),
@@ -120,9 +121,13 @@ impl App {
         controller::register(self.instance)?;
         let controller = controller::create(self)?;
         self.controller.set(Some(controller));
+        let handle = ControllerHandle::new(controller);
+        let matching =
+            MatchThread::start(self.options.password.clone(), move || handle.post_unlock())?;
+        *self.matching.borrow_mut() = Some(matching);
         // The hooks go in before any overlay shows: a key typed as soon as the screen goes dark
-        // must reach the matcher, which `--block-keys` moves to the hook thread.
-        self.start_hooks(controller)?;
+        // must reach the match thread, which `--block-keys` feeds from the hook thread.
+        self.start_hooks(handle)?;
         *self.kept.borrow_mut() = Some(monitors::monitor_at_cursor()?);
         self.reconcile(true)?;
         if let Some(timeout) = self.options.timeout {
@@ -177,9 +182,12 @@ impl App {
         let watch = self.watch.borrow_mut().take();
         drop(watch);
         let hooks = self.hooks.borrow_mut().take();
-        if let Some(mut matcher) = hooks.and_then(HookThread::stop) {
-            matcher.clear();
-            *self.matcher.borrow_mut() = Some(matcher);
+        if let Some(hooks) = hooks {
+            hooks.stop();
+        }
+        // Keys typed into the hook do not join keys typed into an overlay later.
+        if let Some(matching) = self.matching.borrow().as_ref() {
+            matching.units().clear();
         }
         let ours = self.overlays.hwnds();
         let foreground = foreground.filter(|window| !ours.contains(window));
@@ -188,17 +196,17 @@ impl App {
         }
     }
 
-    /// Installs the input hooks the options ask for. With `--block-keys` the password matcher
-    /// moves to the hook thread. With only `--block-mouse`, the password still arrives through
-    /// `WM_CHAR` on the focused overlay; the focus step uses no input, so the hook never blocks it.
-    fn start_hooks(&self, controller: HWND) -> windows::core::Result<()> {
+    /// Installs the input hooks the options ask for. With `--block-keys` the hook thread feeds the
+    /// match thread. With only `--block-mouse`, the password still arrives through `WM_CHAR` on the
+    /// focused overlay; the focus step uses no input, so the hook never blocks it.
+    fn start_hooks(&self, controller: ControllerHandle) -> windows::core::Result<()> {
         if !self.options.block_keys && !self.options.block_mouse {
             return Ok(());
         }
         let keyboard = if self.options.block_keys {
-            let matcher = self.matcher.borrow_mut().take();
-            matcher.map(|matcher| KeyboardConfig {
-                matcher,
+            let units = self.matching.borrow().as_ref().map(|m| m.units().clone());
+            units.map(|units| KeyboardConfig {
+                units,
                 alt_f4_unlocks: self.options.alt_f4_unlocks,
             })
         } else {
@@ -278,15 +286,10 @@ impl App {
         }
     }
 
-    /// Feeds one typed UTF-16 code unit to the password matcher, and unlocks on a match.
+    /// Feeds one typed UTF-16 code unit to the match thread, which unlocks on a match.
     pub fn push_unit(&self, unit: u16) {
-        let matched = self
-            .matcher
-            .borrow_mut()
-            .as_mut()
-            .is_some_and(|matcher| matcher.push(unit));
-        if matched {
-            self.unlock();
+        if let Some(matching) = self.matching.borrow().as_ref() {
+            matching.units().push(unit);
         }
     }
 
@@ -317,6 +320,10 @@ impl App {
         let hooks = self.hooks.borrow_mut().take();
         if let Some(hooks) = hooks {
             hooks.stop();
+        }
+        let matching = self.matching.borrow_mut().take();
+        if let Some(matching) = matching {
+            matching.stop();
         }
         for hwnd in self.overlays.take_all() {
             // SAFETY: each overlay is a window of this thread that still exists.

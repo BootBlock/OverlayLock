@@ -28,7 +28,7 @@ use windows::core::{HSTRING, w};
 /// The process exit codes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ExitStatus {
-    /// The overlay was unlocked, or help or the version was shown.
+    /// The overlay was unlocked, or help, the version or a password hash was shown.
     Unlocked = 0,
     /// A runtime failure stopped the lock.
     Failure = 1,
@@ -47,7 +47,7 @@ impl From<ExitStatus> for ExitCode {
 /// What kind of message is reported, which sets its stream and its icon.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Severity {
-    /// Help or version text: standard output, information icon.
+    /// Help, version or password hash text: standard output, information icon.
     Info,
     /// A usage error or a failure: standard error, error icon.
     Error,
@@ -122,13 +122,16 @@ pub fn release_console_made_for_us() {
     }
 }
 
-fn is_console(handle: HANDLE) -> bool {
+/// Returns `true` if `handle` is a console; otherwise, `false`.
+pub fn is_console(handle: HANDLE) -> bool {
     let mut mode = CONSOLE_MODE::default();
     // SAFETY: `mode` is writable and `handle` is a valid handle.
     unsafe { GetConsoleMode(handle, &raw mut mode) }.is_ok()
 }
 
-fn write_console(handle: HANDLE, line: &str) -> bool {
+/// Writes `line` to a console output handle as UTF-16. Returns `true` if it was written;
+/// otherwise, `false`.
+pub fn write_console(handle: HANDLE, line: &str) -> bool {
     let wide: Vec<u16> = line.encode_utf16().collect();
     // SAFETY: `handle` is a console output handle and `wide` outlives the call.
     unsafe { WriteConsoleW(handle, &wide, None, None) }.is_ok()
