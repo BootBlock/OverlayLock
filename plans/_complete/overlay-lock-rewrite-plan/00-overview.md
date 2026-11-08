@@ -65,6 +65,8 @@ process command line, and a config file comes in a later plan.
 
 - **OL1 Platform.** Windows 10 1809 or later, `x86_64-pc-windows-msvc` and
   `aarch64-pc-windows-msvc`. Rust edition 2024, `rust-version = "1.98"`, stable toolchain.
+  Amended 2026-11-08 by the owner: `i686-pc-windows-msvc` (32-bit x86) ships too, from the
+  release after 0.2.0.
 - **OL2 Dependencies.** Runtime: `windows` 0.62 (needed for the Direct2D and DirectWrite COM
   interfaces) and `lexopt` 0.3 (minimal, strict argument parser). Build: `winresource` 0.1. The icon
   tool `xtask` uses only `windows` (DirectWrite, Direct2D, WIC). Nothing else without a stated reason in the stage. No GUI
@@ -180,7 +182,8 @@ process command line, and a config file comes in a later plan.
 - **OL22 Repository.** MIT licence, `Copyright (c) 2026 Joe Cox`, repository
   `github.com/BootBlock/OverlayLock`, default branch `main`. `Cargo.lock` is committed. CI runs fmt,
   clippy with warnings denied and tests on Windows. A `v*` tag builds x64 and ARM64 zips with
-  SHA-256 sums into a GitHub release. No push, tag or release is made by this plan.
+  SHA-256 sums into a GitHub release (amended 2026-11-08: x64, x86 and arm64 zips, named
+  `overlay-lock-<version>-<x64|x86|arm64>.zip`). No push, tag or release is made by this plan.
 
 ## Stage map
 

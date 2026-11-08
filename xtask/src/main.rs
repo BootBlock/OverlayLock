@@ -5,7 +5,7 @@ mod icon;
 
 use std::process::ExitCode;
 
-const USAGE: &str = "Usage: cargo xtask <command>\n\nCommands:\n  dist    build the release zips into !Distribution\\ (see cargo xtask dist --help)\n  icon    render assets/overlay-lock.ico (see cargo xtask icon --help)";
+const USAGE: &str = "Usage: cargo xtask <command>\n\nCommands:\n  dist    install a build into !Distribution\\, or write the release zips (see cargo xtask dist --help)\n  icon    render assets/overlay-lock.ico (see cargo xtask icon --help)";
 
 fn main() -> ExitCode {
     let mut args = std::env::args().skip(1);

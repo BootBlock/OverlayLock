@@ -21,7 +21,7 @@ jobs:
         with:
           toolchain: stable
           components: rustfmt, clippy
-          targets: aarch64-pc-windows-msvc
+          targets: i686-pc-windows-msvc, aarch64-pc-windows-msvc
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
       - name: Check formatting
         run: cargo fmt --all --check
@@ -29,7 +29,10 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Test
         run: cargo test --workspace
-      - name: Build and package the release (x64 and ARM64)
+      - name: Test as 32-bit x86
+        # Pointer-sized Win32 values differ on x86; the runner runs 32-bit programs.
+        run: cargo test --workspace --target i686-pc-windows-msvc
+      - name: Build and package the release (x64, x86 and ARM64)
         # The release workflow's own packaging step, so a broken package shows up before a release.
         run: cargo run --locked --package xtask -- dist --zip target/dist
 

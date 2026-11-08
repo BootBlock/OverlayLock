@@ -133,8 +133,10 @@ pub unsafe fn dispatch<T>(
         // SAFETY: for `WM_NCCREATE`, `lParam` points to the `CREATESTRUCTW` of this creation,
         // whose `lpCreateParams` is the `Box<T>` pointer (the caller's contract).
         let state = unsafe { (*(lparam.0 as *const CREATESTRUCTW)).lpCreateParams };
+        // The value is pointer-sized on every target: `isize` on 64-bit, and `i32` on 32-bit x86,
+        // where the `windows` crate maps `SetWindowLongPtrW` to `SetWindowLongW`.
         // SAFETY: `hwnd` is the window being created.
-        unsafe { SetWindowLongPtrW(hwnd, GWLP_USERDATA, state as isize) };
+        unsafe { SetWindowLongPtrW(hwnd, GWLP_USERDATA, state as _) };
     }
     // SAFETY: `hwnd` is a valid window of this thread.
     let state = unsafe { GetWindowLongPtrW(hwnd, GWLP_USERDATA) } as *mut T;
