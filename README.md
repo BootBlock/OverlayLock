@@ -178,16 +178,19 @@ cargo build --release --target aarch64-pc-windows-msvc
 ```
 
 The executable is `target\release\overlay-lock.exe` (or under `target\aarch64-pc-windows-msvc`
-for ARM64). To build the same zips a release publishes, run:
+for ARM64). To build a copy you can run in place, for example from a Stream Deck button, run:
 
 ```powershell
 cargo xtask dist
 ```
 
-It builds both targets and replaces the `!Distribution` folder with one zip per target (each holds
-`overlay-lock.exe`, `LICENSE` and `README.md`) and `SHA256SUMS.txt`. Add `--target <triple>` to
-build only that target. The icon is generated, not drawn: to render it again from the Segoe Fluent
-Icons glyph, run:
+It builds for your processor and puts `overlay-lock.exe`, `LICENSE` and `README.md` in the
+`!Distribution` folder. Each run replaces only those three files, so the path stays the same. End
+any lock running from there first, because Windows cannot replace a running program. Add
+`--zip <folder>` to write the zips a release publishes (both processors and `SHA256SUMS.txt`)
+into that folder instead.
+
+The icon is generated, not drawn: to render it again from the Segoe Fluent Icons glyph, run:
 
 ```powershell
 cargo xtask icon

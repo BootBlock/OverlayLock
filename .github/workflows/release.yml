@@ -71,8 +71,8 @@ jobs:
       - name: Test
         run: cargo test --workspace --locked
       - name: Build and package
-        # The same command a maintainer runs locally: zips and SHA256SUMS.txt in !Distribution.
-        run: cargo run --locked --package xtask -- dist
+        # The same packaging CI runs: one zip per target and SHA256SUMS.txt in target/dist.
+        run: cargo run --locked --package xtask -- dist --zip target/dist
       - name: Create the release
         shell: pwsh
         env:
@@ -83,4 +83,4 @@ jobs:
         run: |
           $flags = @('--generate-notes', '--target', $env:SHA, '--title', "OverlayLock $env:TAG")
           if ($env:PRERELEASE -eq 'true') { $flags += '--prerelease' }
-          gh release create $env:TAG @flags (Get-ChildItem -LiteralPath '!Distribution' -File).FullName
+          gh release create $env:TAG @flags (Get-ChildItem -LiteralPath target/dist -File).FullName

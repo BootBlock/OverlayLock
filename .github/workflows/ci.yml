@@ -31,7 +31,7 @@ jobs:
         run: cargo test --workspace
       - name: Build and package the release (x64 and ARM64)
         # The release workflow's own packaging step, so a broken package shows up before a release.
-        run: cargo run --locked --package xtask -- dist
+        run: cargo run --locked --package xtask -- dist --zip target/dist
 
   msrv:
     name: Minimum supported Rust version

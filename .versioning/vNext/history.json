@@ -2,6 +2,14 @@
   "schema": 1,
   "entries": [
     {
+      "id": "f2e46d",
+      "kind": "added",
+      "text": "Running `cargo xtask dist` builds OverlayLock for your processor and puts a ready-to-run copy in the `!Distribution` folder, replacing only its own files so the path stays the same for a Stream Deck button or shortcut; `cargo xtask dist --zip <folder>` writes the x64 and ARM64 release zips with their SHA-256 sums instead.",
+      "date": "2026-11-08",
+      "commit": "72850c9",
+      "agent": "claude"
+    },
+    {
       "id": "a51258",
       "kind": "added",
       "text": "OverlayLock can be downloaded from the GitHub Releases page as a zip for x64 or ARM64 PCs, and a maintainer can publish a new release from the Actions tab with Release > Run workflow.",

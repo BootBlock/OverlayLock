@@ -1,7 +1,12 @@
-//! `cargo xtask dist`: builds the release for each target and writes the files a GitHub release
-//! publishes into `!Distribution/` at the repository root: one zip per target, holding
-//! `overlay-lock.exe`, `LICENSE` and `README.md`, and `SHA256SUMS.txt`. The release workflow runs
-//! the same command, so a local build and a published release hold the same files.
+//! `cargo xtask dist`: builds the release and lays it out in one of two ways.
+//!
+//! - With no `--zip`, it installs one target (this machine's, unless `--target` names another)
+//!   into `!Distribution\` at the repository root: `overlay-lock.exe`, `LICENSE` and `README.md`,
+//!   ready to run from there, for example from a Stream Deck button. It replaces only those three
+//!   files, so the folder and its path stay put between builds.
+//! - With `--zip <folder>`, it writes what a GitHub release publishes into that folder: one zip per
+//!   target, each holding the same three files, and `SHA256SUMS.txt`. CI and the release workflow
+//!   run this form.
 
 use std::fmt::Write as _;
 use std::fs;
@@ -10,24 +15,38 @@ use std::process::{Command, Stdio};
 
 use windows::Win32::Security::Cryptography::{BCRYPT_SHA256_ALG_HANDLE, BCryptHash};
 
-/// The folder, under the repository root, that receives the release files.
-const OUTPUT_DIR: &str = "!Distribution";
+/// The folder, under the repository root, that receives the installed build.
+const INSTALL_DIR: &str = "!Distribution";
 
 /// The targets a release ships, in the order they are built.
 const TARGETS: [&str; 2] = ["x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc"];
 
-/// The files each zip holds besides the executable, relative to the repository root.
+/// The target of the machine this task runs on, which the installed build uses by default.
+const HOST_TARGET: &str = if cfg!(target_arch = "aarch64") {
+    "aarch64-pc-windows-msvc"
+} else {
+    "x86_64-pc-windows-msvc"
+};
+
+/// The file name of the executable.
+const EXE: &str = "overlay-lock.exe";
+
+/// The files shipped beside the executable, relative to the repository root.
 const EXTRA_FILES: [&str; 2] = ["LICENSE", "README.md"];
 
-const USAGE: &str = "Usage: cargo xtask dist [--target <triple>]...\n\n\
-  --target <triple>  build only this target; repeat for more (default: x86_64-pc-windows-msvc\n\
-                     and aarch64-pc-windows-msvc)\n\n\
-Builds each target with `cargo build --release --locked`, then replaces !Distribution\\ with one\n\
-zip per target and SHA256SUMS.txt.";
+const USAGE: &str = "Usage: cargo xtask dist [--target <triple>] [--zip <folder> [--target <triple>]...]\n\n\
+  (no --zip)         build for this machine and install overlay-lock.exe, LICENSE and README.md\n\
+                     into !Distribution\\, ready to run from there\n\
+  --target <triple>  the target to build; with --zip, repeat it for more (default with --zip:\n\
+                     x86_64-pc-windows-msvc and aarch64-pc-windows-msvc)\n\
+  --zip <folder>     write one release zip per target and SHA256SUMS.txt into <folder>, relative\n\
+                     to the repository root\n\n\
+Each target is built with `cargo build --release --locked`.";
 
 /// Runs the `dist` command with the arguments that follow it.
 pub fn run(args: impl Iterator<Item = String>) -> Result<(), String> {
     let mut targets: Vec<String> = Vec::new();
+    let mut zip_dir: Option<PathBuf> = None;
     let mut args = args.peekable();
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -37,6 +56,7 @@ pub fn run(args: impl Iterator<Item = String>) -> Result<(), String> {
                     targets.push(target);
                 }
             }
+            "--zip" => zip_dir = Some(args.next().ok_or("--zip needs a folder")?.into()),
             "-h" | "--help" => {
                 println!("{USAGE}");
                 return Ok(());
@@ -44,37 +64,80 @@ pub fn run(args: impl Iterator<Item = String>) -> Result<(), String> {
             other => return Err(format!("unknown argument '{other}'\n\n{USAGE}")),
         }
     }
-    if targets.is_empty() {
-        targets = TARGETS.iter().map(ToString::to_string).collect();
-    }
 
     let root = repository_root()?;
-    let version = package_version(&root)?;
+    if let Some(folder) = zip_dir {
+        if targets.is_empty() {
+            targets = TARGETS.iter().map(ToString::to_string).collect();
+        }
+        return write_zips(&root, &root.join(folder), &targets);
+    }
+    let target = match targets.as_slice() {
+        [] => HOST_TARGET.to_string(),
+        [target] => target.clone(),
+        _ => return Err(format!("the installed build takes one --target\n\n{USAGE}")),
+    };
+    install(&root, &build(&root, &target)?)
+}
 
+/// Copies the executable and the extra files into `!Distribution\`, replacing only those files.
+///
+/// Each file is written beside its destination first and then renamed over it, so a failed copy
+/// never leaves a half-written executable. A running `overlay-lock.exe` cannot be replaced: end
+/// the lock and run the task again.
+fn install(root: &Path, exe: &Path) -> Result<(), String> {
+    let folder = root.join(INSTALL_DIR);
+    fs::create_dir_all(&folder)
+        .map_err(|error| format!("cannot create {}: {error}", folder.display()))?;
+    let files = std::iter::once((exe.to_path_buf(), EXE))
+        .chain(EXTRA_FILES.iter().map(|name| (root.join(name), *name)));
+    for (source, name) in files {
+        let destination = folder.join(name);
+        let staged = folder.join(format!("{name}.new"));
+        fs::copy(&source, &staged)
+            .map_err(|error| format!("cannot copy {}: {error}", source.display()))?;
+        if let Err(error) = fs::rename(&staged, &destination) {
+            let _ = fs::remove_file(&staged);
+            let hint = if name == EXE {
+                " (is OverlayLock running from there? End the lock and run this again)"
+            } else {
+                ""
+            };
+            return Err(format!(
+                "cannot replace {}: {error}{hint}",
+                destination.display()
+            ));
+        }
+        println!("{}", destination.display());
+    }
+    Ok(())
+}
+
+/// Builds each target and writes its release zip and `SHA256SUMS.txt` into `folder`. Other files
+/// in `folder` are left alone.
+fn write_zips(root: &Path, folder: &Path, targets: &[String]) -> Result<(), String> {
+    let version = package_version(root)?;
     let mut executables = Vec::with_capacity(targets.len());
-    for target in &targets {
-        executables.push(build(&root, target)?);
+    for target in targets {
+        executables.push(build(root, target)?);
     }
-
-    let output = root.join(OUTPUT_DIR);
-    if output.exists() {
-        fs::remove_dir_all(&output)
-            .map_err(|error| format!("cannot clear {}: {error}", output.display()))?;
-    }
-    fs::create_dir_all(&output)
-        .map_err(|error| format!("cannot create {}: {error}", output.display()))?;
-
+    fs::create_dir_all(folder)
+        .map_err(|error| format!("cannot create {}: {error}", folder.display()))?;
     let mut sums = String::new();
     for (target, exe) in targets.iter().zip(&executables) {
         let name = zip_name(&version, target);
-        let zip = output.join(&name);
-        package(&root, exe, &zip)?;
+        let zip = folder.join(&name);
+        if zip.exists() {
+            fs::remove_file(&zip)
+                .map_err(|error| format!("cannot replace {}: {error}", zip.display()))?;
+        }
+        package(root, exe, &zip)?;
         let bytes =
             fs::read(&zip).map_err(|error| format!("cannot read {}: {error}", zip.display()))?;
         sums.push_str(&sum_line(&sha256(&bytes)?, &name));
         println!("{}", zip.display());
     }
-    let sums_path = output.join("SHA256SUMS.txt");
+    let sums_path = folder.join("SHA256SUMS.txt");
     fs::write(&sums_path, sums)
         .map_err(|error| format!("cannot write {}: {error}", sums_path.display()))?;
     println!("{}", sums_path.display());
@@ -164,8 +227,8 @@ fn build(root: &Path, target: &str) -> Result<PathBuf, String> {
         .lines()
         .filter(|line| line.contains(r#""reason":"compiler-artifact""#))
         .filter_map(|line| json_string_field(line, "executable"))
-        .find(|path| Path::new(path).file_name() == Some("overlay-lock.exe".as_ref()))
-        .ok_or_else(|| format!("cargo build for {target} reported no overlay-lock.exe"))?;
+        .find(|path| Path::new(path).file_name() == Some(EXE.as_ref()))
+        .ok_or_else(|| format!("cargo build for {target} reported no {EXE}"))?;
     Ok(PathBuf::from(exe))
 }
 
@@ -263,7 +326,10 @@ fn sum_line(digest: &[u8; 32], name: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{json_string_field, sha256, sum_line, version_from_pkgid, zip_name};
+    use super::{
+        INSTALL_DIR, install, json_string_field, sha256, sum_line, version_from_pkgid, zip_name,
+    };
+    use std::fs;
 
     /// The two forms `cargo pkgid` printed for this workspace (Cargo 1.98).
     #[test]
@@ -333,6 +399,48 @@ mod tests {
         );
         assert_eq!(json_string_field(r#"{"k":"no end"#, "k"), None);
         assert_eq!(json_string_field(r#"{"k":"bad \q"}"#, "k"), None);
+    }
+
+    /// Replaces the three shipped files, keeps anything else in the folder, and leaves no staged
+    /// `.new` file behind.
+    #[test]
+    fn install_replaces_only_the_shipped_files() {
+        let root =
+            std::env::temp_dir().join(format!("overlay-lock-dist-test-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let folder = root.join(INSTALL_DIR);
+        fs::create_dir_all(&folder).expect("the test folder is created");
+        fs::write(root.join("LICENSE"), "new licence").expect("written");
+        fs::write(root.join("README.md"), "new readme").expect("written");
+        let exe = root.join("built.exe");
+        fs::write(&exe, "new exe").expect("written");
+        fs::write(folder.join("overlay-lock.exe"), "old exe").expect("written");
+        fs::write(folder.join("LICENSE"), "old licence").expect("written");
+        fs::write(folder.join("notes.txt"), "mine").expect("written");
+
+        install(&root, &exe).expect("the install succeeds");
+
+        let read = |name: &str| fs::read_to_string(folder.join(name)).expect("readable");
+        assert_eq!(read("overlay-lock.exe"), "new exe");
+        assert_eq!(read("LICENSE"), "new licence");
+        assert_eq!(read("README.md"), "new readme");
+        assert_eq!(read("notes.txt"), "mine");
+        let mut names: Vec<String> = fs::read_dir(&folder)
+            .expect("listable")
+            .map(|entry| {
+                entry
+                    .expect("an entry")
+                    .file_name()
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .collect();
+        names.sort();
+        assert_eq!(
+            names,
+            ["LICENSE", "README.md", "notes.txt", "overlay-lock.exe"]
+        );
+        let _ = fs::remove_dir_all(&root);
     }
 
     #[test]
