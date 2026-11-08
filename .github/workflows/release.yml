@@ -1,11 +1,26 @@
 name: Release
 
+# A release starts in one of two ways, and both give the same result: one zip per target with
+# SHA-256 sums, published on the Releases page.
+# - Push a tag `v<version>` that matches the `Cargo.toml` version.
+# - Run this workflow by hand from the Actions tab, on `main`. It tags the commit it builds as
+#   `v<version>` from `Cargo.toml`, so bump the version before each release.
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      prerelease:
+        description: Mark the release as a pre-release
+        type: boolean
+        default: false
 
 permissions:
   contents: read
+
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 env:
   CARGO_TERM_COLOR: always
@@ -22,19 +37,40 @@ jobs:
         with:
           toolchain: stable
           targets: aarch64-pc-windows-msvc
-      - name: Check the tag matches the crate version
+      - name: Work out the version and the tag
         id: version
         shell: pwsh
         env:
-          TAG: ${{ github.ref_name }}
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          REF_NAME: ${{ github.ref_name }}
         run: |
           $version = (cargo metadata --no-deps --format-version 1 | ConvertFrom-Json).packages |
             Where-Object name -eq 'overlay-lock' | Select-Object -ExpandProperty version
-          if ($env:TAG -ne "v$version") {
-            Write-Error "Tag $env:TAG does not match the Cargo.toml version v$version."
-            exit 1
+          $tag = "v$version"
+          if ($env:EVENT -eq 'push') {
+            if ($env:REF_NAME -ne $tag) {
+              Write-Error "Tag $env:REF_NAME does not match the Cargo.toml version $tag."
+              exit 1
+            }
+          } else {
+            if ($env:REF -ne 'refs/heads/main') {
+              Write-Error "Run a release from main, not $env:REF."
+              exit 1
+            }
+            # `--exit-code` gives 2 when the tag is absent; anything else but 0 is a failure.
+            git ls-remote --exit-code --tags origin "refs/tags/$tag" | Out-Null
+            switch ($LASTEXITCODE) {
+              0 { Write-Error "Tag $tag already exists. Raise the version in Cargo.toml first."; exit 1 }
+              2 { $global:LASTEXITCODE = 0 }
+              default { Write-Error "git ls-remote failed with exit code $LASTEXITCODE."; exit 1 }
+            }
           }
           "version=$version" >> $env:GITHUB_OUTPUT
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+      - name: Test
+        run: cargo test --workspace --locked
       - name: Build
         run: |
           cargo build --release --locked --target x86_64-pc-windows-msvc
@@ -56,5 +92,10 @@ jobs:
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
-        run: gh release create $env:TAG --generate-notes (Get-ChildItem dist/*).FullName
+          TAG: ${{ steps.version.outputs.tag }}
+          SHA: ${{ github.sha }}
+          PRERELEASE: ${{ inputs.prerelease || false }}
+        run: |
+          $flags = @('--generate-notes', '--target', $env:SHA, '--title', "OverlayLock $env:TAG")
+          if ($env:PRERELEASE -eq 'true') { $flags += '--prerelease' }
+          gh release create $env:TAG @flags (Get-ChildItem dist/*).FullName

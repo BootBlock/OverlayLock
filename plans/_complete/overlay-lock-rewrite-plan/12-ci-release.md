@@ -5,7 +5,10 @@
 > `clippy::assert_is_empty` lint fired on three `assert!(x.is_empty())` calls that 1.98.1 passed.
 > Fixed with `assert_eq!` (commit `66e4ca2`, checked locally with 1.99.0 and 1.98.1); run
 > 42489172069 passed both jobs. The CI keeps `stable` on purpose, so a new lint shows up in CI
-> first; the MSRV job keeps 1.98. Pinned:
+> first; the MSRV job keeps 1.98. Added after the plan closed (2026-11-08, owner request):
+> `release.yml` also runs by hand (`workflow_dispatch`, on `main` only, optional pre-release). It
+> tags the built commit `v<version>` from `Cargo.toml`, refuses a tag that exists, and runs the
+> tests before it builds. Pinned:
 > `actions/checkout` v7.0.1 `3d3c42e5`, `Swatinem/rust-cache` v2.9.3 `d1527c8f` (annotated tag
 > dereferenced to its commit), and `dtolnay/rust-toolchain` at `master` `683b588c` with an explicit
 > `toolchain:` input (that action publishes branches, not version tags). The MSRV job runs
