@@ -2,6 +2,14 @@
   "schema": 1,
   "entries": [
     {
+      "id": "79ee44",
+      "kind": "fixed",
+      "text": "Started from a terminal, OverlayLock's help, version and error text now appears before the prompt instead of below it, and the terminal waits for the lock to end, so scripts get its exit code; started from a shortcut or a Stream Deck button, it still opens no console window.",
+      "date": "2026-11-08",
+      "commit": "efdc9e8",
+      "agent": "claude"
+    },
+    {
       "id": "f2e46d",
       "kind": "added",
       "text": "Running `cargo xtask dist` builds OverlayLock for your processor and puts a ready-to-run copy in the `!Distribution` folder, replacing only its own files so the path stays the same for a Stream Deck button or shortcut; `cargo xtask dist --zip <folder>` writes the x64 and ARM64 release zips with their SHA-256 sums instead.",

@@ -31,7 +31,7 @@ const TIMER_RAISE: usize = 3;
 /// The one-shot timer that waits for a late session message after a secure desktop visit.
 const TIMER_SAS_SETTLE: usize = 4;
 
-/// The focus retry and raise interval in milliseconds, as OverlayLockLite used for focus.
+/// The focus retry and raise interval in milliseconds.
 const FOCUS_INTERVAL_MS: u32 = 250;
 
 /// The state of the controller window.

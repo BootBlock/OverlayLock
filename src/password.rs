@@ -4,7 +4,7 @@
 /// they equal the password.
 ///
 /// The ring is allocated once, so [`PasswordMatcher::push`] never allocates. The comparison is
-/// case-sensitive and every unit counts, control characters included, as in OverlayLockLite.
+/// case-sensitive and every unit counts, control characters included.
 #[derive(Debug)]
 pub struct PasswordMatcher {
     password: Box<[u16]>,

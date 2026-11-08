@@ -85,7 +85,7 @@ at start-up.)
 
 ### Examples
 
-To lock every monitor until you type `go`, the same as OverlayLockLite:
+To lock every monitor until you type `go`:
 
 ```powershell
 overlay-lock --password go
@@ -135,7 +135,7 @@ each option.
   lock ends.
 - **Typing the password.** The last characters you typed are compared with the password, so
   mistakes before it don't matter: `xxgo` unlocks a `go` lock. The comparison is case-sensitive,
-  and every key counts, Backspace included, as it did in OverlayLockLite.
+  and every key counts, Backspace included.
 - **`--block-keys`.** Every key is swallowed for the whole system, including the Windows key,
   Alt+Tab and Ctrl+Shift+Esc, and the password is read from the keys themselves. A dead key
   (such as `´` on some layouts) gives no character in this mode, so avoid accented characters

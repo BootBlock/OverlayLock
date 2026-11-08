@@ -1,5 +1,5 @@
-//! Takes the foreground for an overlay, as OverlayLockLite did, so typed keys reach it even when a
-//! launcher such as a Stream Deck kept the focus.
+//! Takes the foreground for an overlay, so typed keys reach it even when a launcher such as a
+//! Stream Deck kept the focus.
 
 use windows::Win32::Foundation::HWND;
 use windows::Win32::System::Threading::{AttachThreadInput, GetCurrentThreadId};
