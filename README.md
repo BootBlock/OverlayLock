@@ -10,11 +10,20 @@ OverlayLock covers your monitors with a plain screen and hides the cursor until 
 password you gave it on the command line. It's a small, fast Windows program with no runtime to
 install, made to be started from a Stream Deck button, a shortcut or a script.
 
+- **Keeps the keyboard and the screen to yourself.** A child, a cat or a passer-by sees a plain
+  screen, and with `--block-keys` and `--block-mouse` their typing and clicking go nowhere.
+- **Protects OLED screens from burn-in.** The screen is pure black (`#000000`) unless you choose
+  another colour, and the cursor is hidden, so every pixel of an OLED panel is switched off while
+  you're away, instead of a static desktop, taskbar or window wearing into it. See
+  [Protecting an OLED screen](#protecting-an-oled-screen).
+- **Shows a message**, such as "Back in five minutes", in the colours, size and font you choose.
+
 ## What it is, and what it is not
 
 OverlayLock is for the moments when you want the screen covered and the keyboard ignored for a
-while: a child or a cat at the keyboard, a screen you don't want glanced at, or a message such as
-"Back in five minutes". You type the password and the screen comes back.
+while: a child or a cat at the keyboard, a screen you don't want glanced at, an OLED monitor you
+want dark while you step away, or a message such as "Back in five minutes". You type the password
+and the screen comes back.
 
 It is not a security tool, and it doesn't replace Win+L. The password is part of the command line,
 which any program running as the same user can read. Ctrl+Alt+Del and Win+L always work, because
@@ -116,6 +125,22 @@ back in from Ctrl+Alt+Del and that the lock ends by itself after half an hour:
 ```powershell
 overlay-lock --password "Purr 42" --block-keys --block-mouse --yield-on-ctrl-alt-del --timeout 30m
 ```
+
+### Protecting an OLED screen
+
+An OLED pixel that shows the same bright image for hours, such as the taskbar or a window's title
+bar, can wear unevenly and leave a faint, permanent image behind. A pixel showing pure black is
+switched off and does not wear. OverlayLock's default screen is pure black with the cursor hidden,
+so this is all a break needs:
+
+```powershell
+overlay-lock --password go
+```
+
+Leave out `--message` for full protection: the message's pixels stay lit in the same place for the
+whole lock. With several monitors, `--monitors cursor` covers only the one under the cursor, so
+the others stay visible. OverlayLock does not keep the display awake, so Windows still turns it
+off when its power settings say to.
 
 To show a message on a dark blue screen:
 
