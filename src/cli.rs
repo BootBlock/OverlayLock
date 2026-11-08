@@ -11,8 +11,14 @@ use crate::colour::Colour;
 use crate::duration::parse_duration;
 use crate::monitors::Monitors;
 
-/// The help text: the only list of the options in prose. The README copies it exactly.
-pub const HELP: &str = "\
+/// The help text: the only list of the options in prose. The README copies it exactly, so a new
+/// version in `Cargo.toml` needs the README's copy updated too (`tests/readme.rs` checks).
+pub const HELP: &str = concat!(
+    "OverlayLock ",
+    env!("CARGO_PKG_VERSION"),
+    "
+Created by Joe Cox - https://bootblock.co.uk
+
 OverlayLock covers the screen until a password is typed.
 
 Usage: overlay-lock --password <TEXT> [OPTIONS]
@@ -44,7 +50,8 @@ Exit codes:
   0  Unlocked (or help or version shown)
   1  A runtime failure
   2  A usage error
-  3  Another instance is already locked";
+  3  Another instance is already locked"
+);
 
 /// The smallest and largest `--text-size`, in points.
 const TEXT_SIZE_RANGE: std::ops::RangeInclusive<f32> = 4.0..=400.0;
@@ -641,5 +648,19 @@ mod tests {
         ] {
             assert!(super::HELP.contains(option), "{option}");
         }
+    }
+
+    #[test]
+    fn help_starts_with_the_name_version_and_author() {
+        let mut lines = super::HELP.lines();
+        assert_eq!(
+            lines.next(),
+            Some(concat!("OverlayLock ", env!("CARGO_PKG_VERSION")))
+        );
+        assert_eq!(
+            lines.next(),
+            Some("Created by Joe Cox - https://bootblock.co.uk")
+        );
+        assert_eq!(lines.next(), Some(""));
     }
 }
