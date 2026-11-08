@@ -1,8 +1,8 @@
 # 07 Message rendering
 
-> **Status: done 2026-11-08, except the live scale-change check.** Changing a monitor's scale on
-> this machine asks for a sign-out before it applies, so `WM_DPICHANGED` could not be triggered
-> live; that check is outstanding. Live, the owner saw two centred, sharp lines on both monitors,
+> **Status: done 2026-11-08.** Changing a monitor's scale on this machine asks for a sign-out
+> before it applies, and a sign-out ends the lock, so `WM_DPICHANGED` could not be triggered live.
+> The owner closed that check as not possible here on 2026-11-08. Live, the owner saw two centred, sharp lines on both monitors,
 > and Comic Sans MS. `--font NoSuchFont` exited 0 with empty stderr. The window keeps its
 > `WindowText` in a `Cell` and takes it out while drawing, so no borrow spans a Direct2D call. The
 > app depends on `windows-numerics` directly for `Vector2` (already in the tree via `windows`).
@@ -45,7 +45,8 @@ Repo: `P:\Source\Rust\OverlayLock`. Prerequisites: 06 done. Locked: OL8.
 - [x] Live: `--message "Locked\nBack soon" --text-size 48 --text-colour gold --colour "#102030"`
       shows two centred lines on every monitor, sharp at each monitor's scale. Capture one monitor
       for the record.
-- [ ] Live: change one monitor's scale in Settings while locked: the text on it keeps its size in
+- [x] (Closed by the owner as not possible on this machine: a scale change needs a sign-out.)
+      Live: change one monitor's scale in Settings while locked: the text on it keeps its size in
       points and stays sharp, and the other monitors do not change.
 - [x] Live: `--font "Comic Sans MS"` changes the font. `--font "NoSuchFont"` falls back with no
       error.

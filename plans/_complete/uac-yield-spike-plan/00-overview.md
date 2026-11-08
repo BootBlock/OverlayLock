@@ -4,7 +4,7 @@
 > prompt. Stage 01 found the signal (`consent.exe` against `LogonUI.exe` at the switch away), and
 > stage 02 applied it, with unit tests and two live checks on Windows 11 (build 26100). Windows 10
 > 1809 is unchecked: the owner waived that part of UY1 (amendment below). Carved out of the rewrite
-> plan (`plans/_incomplete/overlay-lock-rewrite-plan/`, stage 10).
+> plan (`plans/_complete/overlay-lock-rewrite-plan/`, stage 10).
 
 ## What this adds
 
@@ -35,6 +35,6 @@ easier to leave, never harder.
 
 ## Reference
 
-- `plans/_incomplete/overlay-lock-rewrite-plan/10-yield-on-ctrl-alt-del.md`: the spike record
+- `plans/_complete/overlay-lock-rewrite-plan/10-yield-on-ctrl-alt-del.md`: the spike record
   for Ctrl+Alt+Del and Win+L, and the current rule.
 - `src/secure_desktop.rs`: `SasDetector`, `SecureDesktopWatch`.

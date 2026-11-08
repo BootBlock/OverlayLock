@@ -1,8 +1,8 @@
 # 14 Verification
 
-> **Status: done 2026-11-08, with two live checks outstanding.** Outstanding: Lite parity (step 6,
-> the owner did not run it) and, from stage 07, the live monitor-scale change (Windows asks for a
-> sign-out on this machine). The first remote CI run waits on the owner's push (stage 12).
+> **Status: done 2026-11-08.** The owner waived Lite parity (step 6) on 2026-11-08, on the live
+> behaviour matrix in step 5, and closed the stage 07 scale-change check as not possible on this
+> machine. The first remote CI run is green (stage 12).
 
 Repo: `P:\Source\Rust\OverlayLock`. Prerequisites: 01 to 13 done. Locked: all.
 
@@ -74,7 +74,7 @@ Repo: `P:\Source\Rust\OverlayLock`. Prerequisites: 01 to 13 done. Locked: all.
    | Monitor unplugged while locked | Pass after the 10 s raise and the focus handover |
    | Stream Deck launch with another window focused | Pass (Open action; Firefox had the focus) |
    | Stream Deck text action with `--block-keys` | Pass after the `VK_PACKET` fix |
-6. **Lite parity.** Outstanding: the owner did not run it.
+6. **Lite parity.** Waived by the owner on 2026-11-08; the step 5 behaviour matrix stands in.
 7. **Review.** `auto-review` at `medium` (lanes 1 to 4). The repository has no commit, so the
    whole tree was reviewed as new. 7 findings, all fixed: the stage 14 refocus broke OL10 (now a
    handover before the destroy); the README overstated the yield; a failed reconcile stopped

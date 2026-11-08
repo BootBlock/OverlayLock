@@ -1,12 +1,13 @@
 # OverlayLock Rust rewrite plan
 
-> **Status: incomplete, 2026-11-08.** Every stage ran, and the app works live on every check run.
-> Left open: the live monitor-scale change (stage 07; Windows asks for a sign-out here) and the
-> Lite parity run (stage 14). The first remote CI run is green (stage 12), and the OL10 amendment
-> passed a live unplug with `--monitors cursor` (stage 05). The follow-up plan
-> `plans/_complete/uac-yield-spike-plan/` stopped UAC prompts from triggering the yield.
-> Pushed to `github.com/BootBlock/OverlayLock` on 2026-11-08. Authored 2026-11-08. Lives at `plans/overlay-lock-rewrite-plan/` while
-> it is written and run. Filing rules: `plans/_complete/README.md`.
+> **Status: complete, 2026-11-08.** Every stage ran, and the app works live on every check run.
+> The first remote CI run is green (stage 12), and the OL10 amendment passed a live unplug with
+> `--monitors cursor` (stage 05). The owner closed the two checks that did not run: the live
+> monitor-scale change as not possible on this machine (stage 07; Windows asks for a sign-out,
+> which ends the lock) and the Lite parity run as waived (stage 14). The follow-up plan
+> `plans/_complete/uac-yield-spike-plan/` stopped UAC prompts from triggering the yield. Pushed to
+> `github.com/BootBlock/OverlayLock` on 2026-11-08. Authored 2026-11-08. Filing rules:
+> `plans/_complete/README.md`.
 
 ## What this adds
 
@@ -183,14 +184,14 @@ process command line, and a config file comes in a later plan.
 | 04 | `04-monitors.md` | Monitor enumeration, selection, reconcile plan | done 2026-11-08 |
 | 05 | `05-overlay-windows.md` | Window class, overlay set, controller window, focus-mode unlock, Alt+F4 | done 2026-11-08 (+ raise after display change) |
 | 06 | `06-focus-instance-timeout.md` | Foreground forcing, single instance, timeout | done 2026-11-08 |
-| 07 | `07-message-rendering.md` | Direct2D and DirectWrite message | done 2026-11-08 (live DPI-change check outstanding) |
+| 07 | `07-message-rendering.md` | Direct2D and DirectWrite message | done 2026-11-08 (live DPI-change check not possible here) |
 | 08 | `08-keyboard-hook.md` | Hook thread, key state, `ToUnicodeEx`, Alt+F4 in hook mode | done 2026-11-08 (+ `VK_PACKET`) |
 | 09 | `09-mouse-hook.md` | `WH_MOUSE_LL` | done 2026-11-08 (one live failure not reproduced) |
 | 10 | `10-yield-on-ctrl-alt-del.md` | SAS detection spike and yield | done 2026-11-08 (+ hooks pass input on while locked) |
 | 11 | `11-icon.md` | SpectraWrite-style glyph icon, owner pick, `xtask icon`, embed | done 2026-11-08 (U+EE3F LockscreenDesktop) |
 | 12 | `12-ci-release.md` | GitHub Actions CI and tagged release | done 2026-11-08 (first remote run green after a lint fix) |
 | 13 | `13-readme.md` | README with usage, options, recovery, limits | done 2026-11-08 |
-| 14 | `14-verification.md` | Fresh build, size and start-time measures, live checks, review | done 2026-11-08 (Lite parity outstanding) |
+| 14 | `14-verification.md` | Fresh build, size and start-time measures, live checks, review | done 2026-11-08 (Lite parity waived) |
 
 All stages land in `P:\Source\Rust\OverlayLock`.
 
