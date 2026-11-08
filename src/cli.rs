@@ -11,12 +11,66 @@ use crate::colour::Colour;
 use crate::duration::parse_duration;
 use crate::monitors::Monitors;
 
-/// The help text: the only list of the options in prose. The README copies it exactly, so a new
-/// version in `Cargo.toml` needs the README's copy updated too (`tests/readme.rs` checks).
-pub const HELP: &str = concat!(
-    "OverlayLock ",
-    env!("CARGO_PKG_VERSION"),
-    "
+/// The build date `build.rs` recorded, as `YYYY-MM-DD`.
+const BUILD_DATE: &str = env!("OVERLAY_LOCK_BUILD_DATE");
+
+/// The month names, January first.
+const MONTHS: [&str; 12] = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+];
+
+/// Gets the help text: a first line with the version and the build date, then [`HELP_BODY`].
+pub fn help() -> String {
+    format!(
+        "OverlayLock {}, built on the {}\n{HELP_BODY}",
+        env!("CARGO_PKG_VERSION"),
+        long_date(BUILD_DATE)
+    )
+}
+
+/// Formats a `YYYY-MM-DD` date as an ordinal day, the month name and the year, such as
+/// `8th November 2026`. Gives the text back unchanged if it is not such a date.
+fn long_date(iso: &str) -> String {
+    let parts: Vec<&str> = iso.split('-').collect();
+    let parsed = match parts.as_slice() {
+        [year, month, day] if year.len() == 4 && month.len() == 2 && day.len() == 2 => year
+            .parse::<u32>()
+            .ok()
+            .zip(month.parse::<usize>().ok())
+            .zip(day.parse::<u32>().ok())
+            .map(|((year, month), day)| (year, month, day)),
+        _ => None,
+    };
+    match parsed {
+        Some((year, month @ 1..=12, day @ 1..=31)) => {
+            let suffix = match (day % 10, day % 100) {
+                (_, 11..=13) => "th",
+                (1, _) => "st",
+                (2, _) => "nd",
+                (3, _) => "rd",
+                _ => "th",
+            };
+            format!("{day}{suffix} {} {year}", MONTHS[month - 1])
+        }
+        _ => iso.to_string(),
+    }
+}
+
+/// The help text after its first line: the only list of the options in prose. The README copies
+/// the whole help exactly, apart from the build date, so a new version in `Cargo.toml` needs the
+/// README's copy updated too (`tests/readme.rs` checks).
+pub const HELP_BODY: &str = "\
 Created by Joe Cox - https://bootblock.co.uk
 
 OverlayLock covers the screen until a password is typed.
@@ -50,8 +104,7 @@ Exit codes:
   0  Unlocked (or help or version shown)
   1  A runtime failure
   2  A usage error
-  3  Another instance is already locked"
-);
+  3  Another instance is already locked";
 
 /// The smallest and largest `--text-size`, in points.
 const TEXT_SIZE_RANGE: std::ops::RangeInclusive<f32> = 4.0..=400.0;
@@ -646,21 +699,65 @@ mod tests {
             "--help",
             "--version",
         ] {
-            assert!(super::HELP.contains(option), "{option}");
+            assert!(super::help().contains(option), "{option}");
         }
     }
 
     #[test]
-    fn help_starts_with_the_name_version_and_author() {
-        let mut lines = super::HELP.lines();
-        assert_eq!(
-            lines.next(),
-            Some(concat!("OverlayLock ", env!("CARGO_PKG_VERSION")))
+    fn help_starts_with_the_name_version_build_date_and_author() {
+        let help = super::help();
+        let mut lines = help.lines();
+        let first = format!(
+            "OverlayLock {}, built on the {}",
+            env!("CARGO_PKG_VERSION"),
+            super::long_date(super::BUILD_DATE)
         );
+        assert_eq!(lines.next(), Some(first.as_str()));
         assert_eq!(
             lines.next(),
             Some("Created by Joe Cox - https://bootblock.co.uk")
         );
         assert_eq!(lines.next(), Some(""));
+    }
+
+    #[test]
+    fn long_date_uses_english_ordinals() {
+        for (iso, long) in [
+            ("2026-11-01", "1st November 2026"),
+            ("2026-11-02", "2nd November 2026"),
+            ("2026-11-03", "3rd November 2026"),
+            ("2026-11-08", "8th November 2026"),
+            ("2026-11-11", "11th November 2026"),
+            ("2026-11-12", "12th November 2026"),
+            ("2026-11-13", "13th November 2026"),
+            ("2026-11-21", "21st November 2026"),
+            ("2026-11-22", "22nd November 2026"),
+            ("2026-11-23", "23rd November 2026"),
+            ("2026-01-31", "31st January 2026"),
+            ("2027-12-30", "30th December 2027"),
+        ] {
+            assert_eq!(super::long_date(iso), long, "{iso}");
+        }
+    }
+
+    #[test]
+    fn long_date_gives_back_text_that_is_not_a_date() {
+        for text in [
+            "",
+            "2026-11",
+            "2026-13-01",
+            "2026-00-10",
+            "2026-11-32",
+            "26-11-08",
+            "x",
+        ] {
+            assert_eq!(super::long_date(text), text);
+        }
+    }
+
+    /// The date `build.rs` recorded is a real date, so the help never shows the raw text.
+    #[test]
+    fn the_recorded_build_date_formats() {
+        assert_ne!(super::long_date(super::BUILD_DATE), super::BUILD_DATE);
     }
 }

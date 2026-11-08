@@ -35,7 +35,7 @@ fn main() -> ExitCode {
 fn run() -> ExitStatus {
     match cli::parse(std::env::args_os().skip(1)) {
         Ok(Command::Help) => {
-            report(Severity::Info, cli::HELP);
+            report(Severity::Info, &cli::help());
             ExitStatus::Unlocked
         }
         Ok(Command::Version) => {
