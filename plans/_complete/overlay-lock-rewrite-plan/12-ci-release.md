@@ -8,7 +8,9 @@
 > first; the MSRV job keeps 1.98. Added after the plan closed (2026-11-08, owner request):
 > `release.yml` also runs by hand (`workflow_dispatch`, on `main` only, optional pre-release). It
 > tags the built commit `v<version>` from `Cargo.toml`, refuses a tag that exists, and runs the
-> tests before it builds. Pinned:
+> tests before it builds. First manual run 42492240765 published pre-release `v0.1.0` on
+> `2f99e58`: both zips and `SHA256SUMS.txt`; the sums match the downloads, and the x64 zip's exe
+> printed `overlay-lock 0.1.0`. Pinned:
 > `actions/checkout` v7.0.1 `3d3c42e5`, `Swatinem/rust-cache` v2.9.3 `d1527c8f` (annotated tag
 > dereferenced to its commit), and `dtolnay/rust-toolchain` at `master` `683b588c` with an explicit
 > `toolchain:` input (that action publishes branches, not version tags). The MSRV job runs
