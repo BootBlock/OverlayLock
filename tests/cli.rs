@@ -14,7 +14,7 @@ fn help_prints_to_stdout_and_exits_0() {
     let output = run(&["--help"]);
     assert_eq!(output.status.code(), Some(0));
     assert!(String::from_utf8_lossy(&output.stdout).contains("--password"));
-    assert!(output.stderr.is_empty());
+    assert_eq!(String::from_utf8_lossy(&output.stderr), "");
 }
 
 #[test]
@@ -27,7 +27,7 @@ fn no_arguments_is_a_usage_error_naming_password() {
         stderr.contains("Run overlay-lock --help for the options."),
         "stderr: {stderr}"
     );
-    assert!(output.stdout.is_empty());
+    assert_eq!(String::from_utf8_lossy(&output.stdout), "");
 }
 
 #[test]

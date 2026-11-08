@@ -274,7 +274,7 @@ mod tests {
     fn reconcile_without_change_is_empty() {
         let all = three();
         let wanted: Vec<&Monitor> = all.iter().collect();
-        assert!(reconcile(&current(&all), &wanted).is_empty());
+        assert_eq!(reconcile(&current(&all), &wanted), []);
     }
 
     #[test]
