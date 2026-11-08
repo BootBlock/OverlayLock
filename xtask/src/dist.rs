@@ -22,30 +22,8 @@ use windows::Win32::Security::Cryptography::{BCRYPT_SHA256_ALG_HANDLE, BCryptHas
 /// The folder, under the repository root, that receives the installed build.
 const INSTALL_DIR: &str = "!Distribution";
 
-/// A target a release ships: the short name its zip uses, and the Rust target triple it is built
-/// for.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct Target {
-    name: &'static str,
-    triple: &'static str,
-}
-
-/// The targets a release ships, in the order they are built. Each triple also needs its static
-/// C runtime table in `.cargo/config.toml`.
-const TARGETS: [Target; 3] = [
-    Target {
-        name: "x64",
-        triple: "x86_64-pc-windows-msvc",
-    },
-    Target {
-        name: "x86",
-        triple: "i686-pc-windows-msvc",
-    },
-    Target {
-        name: "arm64",
-        triple: "aarch64-pc-windows-msvc",
-    },
-];
+// `Target`, `TARGETS` and `exe_name`, shared with the build script's version resource.
+include!("../../release_targets.rs");
 
 /// The target of the machine this task runs on, which the installed build uses by default.
 const HOST_TARGET: Target = TARGETS[if cfg!(target_arch = "aarch64") {
@@ -237,11 +215,6 @@ fn version_from_pkgid(pkgid: &str) -> Option<&str> {
 /// Gets the Cargo that runs this task, or `cargo` from `PATH` outside `cargo run`.
 fn cargo() -> std::ffi::OsString {
     std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into())
-}
-
-/// Gets the file name of the executable in a target's zip, such as `overlay-lock-x64.exe`.
-fn exe_name(target: Target) -> String {
-    format!("overlay-lock-{}.exe", target.name)
 }
 
 /// Gets the zip file name for a version and a target, such as `overlay-lock-0.2.0-x64.zip`.
@@ -576,6 +549,20 @@ mod tests {
             .collect();
         entries.sort();
         assert_eq!(entries, ["LICENSE", "README.md", "overlay-lock-x64.exe"]);
+        let renamed = std::process::Command::new(
+            std::path::Path::new(&system_root)
+                .join("System32")
+                .join("tar.exe"),
+        )
+        .args(["-x", "-O", "-f"])
+        .arg(&zip)
+        .arg("overlay-lock-x64.exe")
+        .output()
+        .expect("tar extracts the executable");
+        assert_eq!(
+            renamed.stdout, b"exe",
+            "the renamed entry is the built executable"
+        );
         let left: Vec<_> = fs::read_dir(&out)
             .expect("listable")
             .map(|entry| entry.expect("an entry").file_name())

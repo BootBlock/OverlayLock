@@ -70,6 +70,9 @@ jobs:
           "tag=$tag" >> $env:GITHUB_OUTPUT
       - name: Test
         run: cargo test --workspace --locked
+      - name: Test as 32-bit x86
+        # As in CI: pointer-sized Win32 values differ on x86, and the x86 zip ships from this run.
+        run: cargo test --workspace --locked --target i686-pc-windows-msvc
       - name: Build and package
         # The same packaging CI runs: one zip per target and SHA256SUMS.txt in target/dist.
         run: cargo run --locked --package xtask -- dist --zip target/dist

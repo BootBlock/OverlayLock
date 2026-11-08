@@ -73,7 +73,8 @@ process command line, and a config file comes in a later plan.
   framework, no async runtime, no logging crate.
 - **OL3 Build profile.** `[profile.release]`: `opt-level = 3`, `lto = "fat"`, `codegen-units = 1`,
   `panic = "abort"`, `strip = true`, `debug = false`. `.cargo/config.toml` sets
-  `-C target-feature=+crt-static` for both MSVC targets, so the exe needs no VC++ redistributable.
+  `-C target-feature=+crt-static` for both MSVC targets, so the exe needs no VC++ redistributable
+  (amended 2026-11-08: for all three, with `i686-pc-windows-msvc`).
 - **OL4 Reporting.** `#![windows_subsystem = "windows"]` in every profile. A message (usage error,
   `--help`, `--version`, runtime failure) goes to the first sink that exists: the inherited stderr
   or stdout handle (redirected by a parent), then the parent console through

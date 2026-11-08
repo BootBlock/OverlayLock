@@ -1,11 +1,15 @@
 //! Embeds the application manifest, the icon and the version resource into `overlay-lock.exe`, and
 //! records the build date for `--help` as `OVERLAY_LOCK_BUILD_DATE` (`YYYY-MM-DD`).
 
+// `Target`, `TARGETS` and `exe_name`, shared with `cargo xtask dist`'s zip names.
+include!("release_targets.rs");
+
 const MANIFEST: &str = "assets/overlay-lock.manifest";
 const ICON: &str = "assets/overlay-lock.ico";
 
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
+    println!("cargo:rerun-if-changed=release_targets.rs");
     println!("cargo:rerun-if-changed={MANIFEST}");
     println!("cargo:rerun-if-changed={ICON}");
     // The build date must change whenever the executable is rebuilt, so this script reruns on
@@ -24,11 +28,21 @@ fn main() {
         .set("ProductName", "OverlayLock")
         .set("FileDescription", "OverlayLock")
         .set("InternalName", "overlay-lock")
-        .set("OriginalFilename", "overlay-lock.exe")
+        .set("OriginalFilename", &original_filename())
         .set("LegalCopyright", "Copyright (c) 2026 Joe Cox");
     if let Err(error) = res.compile() {
         panic!("failed to compile the Windows resources: {error}");
     }
+}
+
+/// Gets the name the release zip gives the executable for the target being built, such as
+/// `overlay-lock-x64.exe`, or `overlay-lock.exe` for a target no release ships.
+fn original_filename() -> String {
+    let triple = std::env::var("TARGET").expect("Cargo sets TARGET for build scripts");
+    TARGETS
+        .into_iter()
+        .find(|target| target.triple == triple)
+        .map_or_else(|| "overlay-lock.exe".to_string(), exe_name)
 }
 
 /// Gets the build date: the UTC date of `SOURCE_DATE_EPOCH` when it is set (reproducible builds),
