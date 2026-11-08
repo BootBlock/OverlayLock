@@ -9,7 +9,7 @@ publish = false
 
 [dependencies]
 # Matrix3x2 and Vector2 for Direct2D: part of the windows crate family, which re-exports neither.
-windows-numerics = "0.3.1"
+windows-numerics = "0.100.0"
 
 [dependencies.windows]
 version = "0.62.2"
