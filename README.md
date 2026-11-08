@@ -77,6 +77,12 @@ A colour is `#RGB` or `#RRGGBB` (the `#` is optional, and case doesn't matter) o
 named colours of CSS Color 4, such as `navy` or `rebeccapurple`. A duration is one or more whole
 numbers with `h`, `m` and `s`, in that order, such as `45s`, `10m` or `1h30m`.
 
+Started from a terminal, OverlayLock prints there and the terminal waits until the lock ends, so a
+script can read the exit code (`$LASTEXITCODE` in PowerShell, `%ERRORLEVEL%` in Command Prompt).
+Started from a shortcut or a Stream Deck button, it opens no console window, and help or an error
+shows in a message box instead. (Before Windows 11 24H2, a console window may flash for a moment
+at start-up.)
+
 ### Examples
 
 To lock every monitor until you type `go`, the same as OverlayLockLite:

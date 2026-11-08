@@ -1,19 +1,24 @@
 //! Shows a message to the person who started the process, and defines the exit codes.
 //!
-//! The binary uses the GUI subsystem, so it has no console of its own. A message goes to the first
-//! sink that exists: a standard handle the parent redirected or shared, then the parent's console,
-//! then a message box.
+//! The binary uses the console subsystem, so a shell waits for it and its text and exit code reach
+//! that shell in order. Its manifest sets `consoleAllocationPolicy` to `detached` (Windows 11 24H2
+//! and later), so Windows gives it no console when nothing else did: started from a shortcut or a
+//! Stream Deck button, no console window appears. Older Windows ignores that setting and makes a
+//! console for it; [`release_console_made_for_us`] closes that at once.
+//!
+//! A message goes to the first sink that exists: the standard handle (a console the process shares
+//! with its shell, or a pipe or file a parent redirected), then a message box.
 
 use std::process::ExitCode;
 
-use windows::Win32::Foundation::{GENERIC_WRITE, HANDLE};
+use windows::Win32::Foundation::HANDLE;
 use windows::Win32::Storage::FileSystem::{
-    CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_WRITE, FILE_TYPE_CHAR, FILE_TYPE_UNKNOWN,
-    GetFileType, OPEN_EXISTING, WriteFile,
+    FILE_TYPE_CHAR, FILE_TYPE_UNKNOWN, GetFileType, WriteFile,
 };
 use windows::Win32::System::Console::{
-    ATTACH_PARENT_PROCESS, AttachConsole, CONSOLE_MODE, FreeConsole, GetConsoleMode, GetStdHandle,
-    STD_ERROR_HANDLE, STD_HANDLE, STD_OUTPUT_HANDLE, WriteConsoleW,
+    CONSOLE_MODE, FreeConsole, GetConsoleMode, GetConsoleProcessList, GetConsoleWindow,
+    GetStdHandle, STD_ERROR_HANDLE, STD_HANDLE, STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, SetStdHandle,
+    WriteConsoleW,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     MB_ICONERROR, MB_ICONINFORMATION, MB_OK, MB_SETFOREGROUND, MessageBoxW,
@@ -58,7 +63,7 @@ pub fn report(severity: Severity, text: &str) {
     line.push_str(text.trim_end_matches('\n'));
     line.push('\n');
 
-    if write_std_handle(stream, &line) || write_parent_console(&line) {
+    if write_std_handle(stream, &line) {
         return;
     }
     let style = match severity {
@@ -93,34 +98,28 @@ fn write_std_handle(stream: STD_HANDLE, line: &str) -> bool {
     }
 }
 
-/// Attaches to the parent's console, if it has one, and writes there.
-fn write_parent_console(line: &str) -> bool {
-    // SAFETY: `AttachConsole` has no preconditions; it fails when there is no parent console.
-    if unsafe { AttachConsole(ATTACH_PARENT_PROCESS) }.is_err() {
-        return false;
+/// Closes the console if Windows made it for this process alone, which happens only where the
+/// `detached` console allocation policy is not supported (before Windows 11 24H2) and nothing
+/// started the process from a console. A console shared with a shell is kept. Call it first in
+/// `main`, so the window shows for as short a time as possible.
+pub fn release_console_made_for_us() {
+    // SAFETY: plain query with no preconditions.
+    if unsafe { GetConsoleWindow() }.is_invalid() {
+        return;
     }
-    // SAFETY: the file name is a valid wide string and the arguments are valid for a console.
-    let written = unsafe {
-        CreateFileW(
-            w!("CONOUT$"),
-            GENERIC_WRITE.0,
-            FILE_SHARE_WRITE,
-            None,
-            OPEN_EXISTING,
-            FILE_ATTRIBUTE_NORMAL,
-            None,
-        )
+    let mut processes = [0u32; 2];
+    // SAFETY: the buffer is writable and its length is passed with it.
+    let attached = unsafe { GetConsoleProcessList(&mut processes) };
+    if attached != 1 {
+        return;
     }
-    .is_ok_and(|console| {
-        // The shell printed its prompt before this text arrives, so start on a new line.
-        let ok = write_console(console, &format!("\n{line}"));
-        // SAFETY: `console` came from `CreateFileW` above and is closed once.
-        let _ = unsafe { windows::Win32::Foundation::CloseHandle(console) };
-        ok
-    });
-    // SAFETY: detaches the console attached above.
+    // SAFETY: detaches this process from the console it alone uses, which closes it.
     let _ = unsafe { FreeConsole() };
-    written
+    for stream in [STD_INPUT_HANDLE, STD_OUTPUT_HANDLE, STD_ERROR_HANDLE] {
+        // SAFETY: clears a standard handle that pointed at the console just closed, so `report`
+        // falls through to the message box.
+        let _ = unsafe { SetStdHandle(stream, HANDLE::default()) };
+    }
 }
 
 fn is_console(handle: HANDLE) -> bool {

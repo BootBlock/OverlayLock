@@ -78,6 +78,14 @@ process command line, and a config file comes in a later plan.
   `AttachConsole(ATTACH_PARENT_PROCESS)`, then a `MessageBoxW`. Tests always redirect, so they never
   see a message box. Exit codes: `0` unlocked, `1` runtime failure, `2` usage error, `3` another
   instance is already locked.
+  *Amended by the owner on 2026-11-08:* a shell does not wait for a GUI-subsystem program, so its
+  prompt came back first and the text landed below it, with the caret above. The binary is now a
+  console program (shells wait, and exit codes reach them) whose manifest sets
+  `consoleAllocationPolicy` to `detached` (Windows 11 24H2, build 26100, and later), so a start
+  from a shortcut or a Stream Deck gets no console. Older Windows makes a console anyway;
+  `report::release_console_made_for_us` frees it at once when this process is its only user (a
+  brief flash). The sinks are now the standard handle, then a `MessageBoxW`; the
+  `AttachConsole` sink went, as a console program inherits its shell's console.
 - **OL5 Command line.** Exactly these options, parsed in `src/cli.rs`:
 
   | Option | Value | Default |

@@ -1,8 +1,6 @@
 //! OverlayLock covers the screen with a borderless, topmost overlay and hides the cursor until the
 //! password given on the command line is typed.
 
-#![windows_subsystem = "windows"]
-
 mod app;
 mod cli;
 mod colour;
@@ -30,6 +28,7 @@ use instance::InstanceGuard;
 use report::{ExitStatus, Severity, report};
 
 fn main() -> ExitCode {
+    report::release_console_made_for_us();
     run().into()
 }
 
