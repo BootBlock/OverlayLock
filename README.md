@@ -55,7 +55,7 @@ cargo install --git https://github.com/BootBlock/OverlayLock
 This is the output of `overlay-lock --help`:
 
 ```text
-OverlayLock 0.2.0, built on the 8th November 2026
+OverlayLock 0.3.0, built on the 8th November 2026
 Created by Joe Cox - https://bootblock.co.uk
 
 OverlayLock covers the screen until a password is typed.
