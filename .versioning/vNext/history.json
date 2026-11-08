@@ -1,0 +1,35 @@
+{
+  "schema": 1,
+  "entries": [
+    {
+      "id": "25eb8f",
+      "kind": "added",
+      "text": "OverlayLock has its own rainbow lock-screen icon, in the same style as SpectraWrite's.",
+      "date": "2026-11-08",
+      "images": [
+        "images/overlay-lock-256.png"
+      ],
+      "agent": "claude"
+    },
+    {
+      "id": "af3e4f",
+      "kind": "added",
+      "text": "Every option is listed by `overlay-lock --help`: block the keyboard or the mouse system-wide, end the lock after a timeout, ignore Alt+F4, cover only the monitor under the cursor, and step back after Ctrl+Alt+Del so Task Manager can be used.",
+      "date": "2026-11-08",
+      "images": [
+        "images/help-console.png"
+      ],
+      "agent": "claude"
+    },
+    {
+      "id": "57b750",
+      "kind": "added",
+      "text": "OverlayLock covers every monitor with a plain screen and hides the cursor until you type the password you gave it on the command line, and it can show a centred message in the colours, size and font you choose.",
+      "date": "2026-11-08",
+      "images": [
+        "images/message.png"
+      ],
+      "agent": "claude"
+    }
+  ]
+}
