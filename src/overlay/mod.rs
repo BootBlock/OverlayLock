@@ -13,8 +13,9 @@ use windows::Win32::UI::WindowsAndMessaging::{
 
 use crate::monitors::{MonitorId, Rect};
 
-/// Posted to the controller to unlock, by the UI thread or the hook thread. Every cause (the
-/// password, Alt+F4, the timeout, the end of the session) ends the lock the same way.
+/// Posted to the controller to unlock, by the UI thread, the hook thread (Alt+F4) or the match
+/// thread (the password). Every cause (the password, Alt+F4, the timeout, the end of the session)
+/// ends the lock the same way.
 pub const WM_APP_UNLOCK: u32 = WM_APP + 1;
 
 /// Posted to the controller by an overlay that received `WM_DISPLAYCHANGE`.

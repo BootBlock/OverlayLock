@@ -89,11 +89,16 @@ process command line, and a config file comes in a later plan.
   `report::release_console_made_for_us` frees it at once when this process is its only user (a
   brief flash). The sinks are now the standard handle, then a `MessageBoxW`; the
   `AttachConsole` sink went, as a console program inherits its shell's console.
+  *Amended on 2026-11-08 for issue #2:* `--make-hash` started with no standard input (from a
+  shortcut or the Run dialog) opens a console of its own with `AllocConsole` for its prompts, and
+  keeps the hash on screen until Enter (OL5).
 - **OL5 Command line.** Exactly these options, parsed in `src/cli.rs`:
 
   | Option | Value | Default |
   |---|---|---|
-  | `-p`, `--password <TEXT>` | required, non-empty | none: usage error |
+  | `-p`, `--password <TEXT>` | non-empty; this or `--password-hash` is required | none: usage error |
+  | `--password-hash <HASH>` | the hash `--make-hash` prints | none |
+  | `--make-hash` | ask for a password, print its hash, exit; takes no other option | |
   | `--monitors <all\|cursor>` | which monitors to cover | `all` |
   | `--colour <COLOUR>` (alias `--color`) | background | `black` |
   | `--message <TEXT>` | centred text; `\n` is a line break, `\\` a backslash | none |
@@ -158,9 +163,11 @@ process command line, and a config file comes in a later plan.
 - **OL11 Keyboard hook.** `--block-keys` installs `WH_KEYBOARD_LL` on a dedicated hook thread with
   its own message loop at `THREAD_PRIORITY_HIGHEST`. It swallows every key event. Key-downs pass
   through its own key state and `ToUnicodeEx` (flag `0x4`, layout of the hook thread at install)
-  into the hook thread's `PasswordMatcher` (amended 2026-11-08: to the match thread, OL6). A dead key gives no character in hook mode (documented).
+  into the hook thread's `PasswordMatcher`. A dead key gives no character in hook mode (documented).
   Injected input (`LLKHF_INJECTED`, e.g. a Stream Deck text action) counts like physical input. On a
   match the hook thread posts an unlock message to the controller window (OL18).
+  *Amended on 2026-11-08 for issue #2:* the characters go to the match thread (OL6), which posts
+  the unlock message on a match. The hook thread posts it itself only for Alt+F4 (OL13).
 - **OL12 Mouse hook.** `--block-mouse` installs `WH_MOUSE_LL` on the same hook thread and swallows
   every mouse event, movement included. Each flag works alone or with the other.
 - **OL13 Alt+F4.** Alt+F4 unlocks in both modes unless `--ignore-alt-f4` is given. In focus mode the
@@ -181,7 +188,8 @@ process command line, and a config file comes in a later plan.
 - **OL17 Fail open.** `panic = "abort"`. A crash ends the process, and Windows then removes the hooks
   and the windows: a fault unlocks. Nothing restarts the app.
 - **OL18 Structure.** A message-only controller window (`HWND_MESSAGE`) owns the timers, receives
-  the unlock message from the hook thread and drives exit. One module per responsibility (stage 01
+  the unlock message from the hook thread (amended 2026-11-08: and from the match thread, OL6) and
+  drives exit. One module per responsibility (stage 01
   lists them). `unsafe` stays in the Win32 modules, each block with a `// SAFETY:` comment.
   Window state is reached through `GWLP_USERDATA`. Never hold a `RefCell` borrow across a Win32
   call that can send a message (`DestroyWindow`, `SetWindowPos`, `SetForegroundWindow`), because

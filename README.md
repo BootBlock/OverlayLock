@@ -7,7 +7,7 @@
 [![Release](https://img.shields.io/github/v/release/BootBlock/OverlayLock?label=release)](https://github.com/BootBlock/OverlayLock/releases)
 
 OverlayLock covers your monitors with a plain screen and hides the cursor until you type the
-password you gave it on the command line. It's a small, fast Windows program with no runtime to
+password you gave it on the command line (or the password whose hash you gave it). It's a small, fast Windows program with no runtime to
 install, made to be started from a Stream Deck button, a shortcut or a script.
 
 - **Keeps the keyboard and the screen to yourself.** A child, a cat or a passer-by sees a plain
@@ -28,8 +28,8 @@ and the screen comes back.
 It is not a security tool, and it doesn't replace Win+L. The password is part of the command line,
 which any program running as the same user can read, unless you give its hash instead (see
 [Keeping the password off the command line](#keeping-the-password-off-the-command-line)), and
-anyone who reads the hash can still test guesses against it. Ctrl+Alt+Del and Win+L always work, because
-Windows never passes them to an application, and from the Ctrl+Alt+Del screen anyone at the
+anyone who reads the hash can still test guesses against it. Ctrl+Alt+Del and Win+L always work,
+because Windows never passes them to an application, and from the Ctrl+Alt+Del screen anyone at the
 keyboard can start Task Manager or sign out. Use the Windows lock screen when you need the
 computer protected.
 
@@ -107,7 +107,8 @@ Started from a terminal, OverlayLock prints there and the terminal waits until t
 script can read the exit code (`$LASTEXITCODE` in PowerShell, `%ERRORLEVEL%` in Command Prompt).
 Started from a shortcut or a Stream Deck button, it opens no console window, and help or an error
 shows in a message box instead. (Before Windows 11 24H2, a console window may flash for a moment
-at start-up.)
+at start-up.) The one exception is `--make-hash`, which opens a console window to ask for the
+password.
 
 ### Examples
 

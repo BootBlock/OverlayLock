@@ -50,7 +50,8 @@ impl UnitSender {
         queued
     }
 
-    /// Forgets every unit queued or typed so far: the next unit restarts the match.
+    /// Makes the next unit pushed restart the match, so no unit pushed before this call joins a
+    /// unit pushed after it. Units already queued are still matched, in order.
     pub fn clear(&self) {
         self.gap.store(true, Ordering::Release);
     }

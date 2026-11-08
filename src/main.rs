@@ -1,5 +1,5 @@
 //! OverlayLock covers the screen with a borderless, topmost overlay and hides the cursor until the
-//! password given on the command line is typed.
+//! password given on the command line, or the password whose hash was given, is typed.
 
 mod app;
 mod cli;

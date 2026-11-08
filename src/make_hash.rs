@@ -7,8 +7,9 @@
 //!   `CONOUT$`, so the hash alone goes to standard output and `> hash.txt` captures only the hash.
 //! - Redirected standard input (a pipe or a file): it is read as UTF-8 text, and one line break at
 //!   the end is dropped.
-//! - Neither, as from a shortcut or the Run dialog: a console is opened for the prompts, and the
-//!   hash is shown there until Enter is pressed, so it can be copied.
+//! - Neither, as from a shortcut or the Run dialog: the prompts and the hash go to the console the
+//!   process has, or to one it opens. A console it opens shows the hash until Enter is pressed, so
+//!   it can be copied before the console closes with the process.
 
 use windows::Win32::Foundation::{CloseHandle, GENERIC_READ, GENERIC_WRITE, HANDLE};
 use windows::Win32::Storage::FileSystem::{
@@ -18,12 +19,12 @@ use windows::Win32::Storage::FileSystem::{
 use windows::Win32::System::Console::{
     AllocConsole, CONSOLE_MODE, ENABLE_ECHO_INPUT, ENABLE_LINE_INPUT, ENABLE_PROCESSED_INPUT,
     ENABLE_VIRTUAL_TERMINAL_INPUT, GetConsoleMode, GetStdHandle, ReadConsoleW, STD_INPUT_HANDLE,
-    SetConsoleMode, WriteConsoleW,
+    SetConsoleMode,
 };
 use windows::core::{PCWSTR, w};
 
 use crate::password::hash::{MAX_LENGTH, PasswordHash};
-use crate::report::{ExitStatus, Severity, report};
+use crate::report::{ExitStatus, Severity, is_console, report, write_console};
 
 /// Why no hash was made.
 #[derive(Debug, PartialEq, Eq)]
@@ -59,7 +60,7 @@ pub fn run() -> ExitStatus {
         Source::Redirected => read_redirected()
             .map_err(Failure::from)
             .and_then(|password| hash_text(&password)),
-        Source::Nothing => return run_in_own_console(),
+        Source::Nothing => return run_without_standard_input(),
     };
     match result {
         Ok(text) => {
@@ -74,42 +75,50 @@ pub fn run() -> ExitStatus {
     }
 }
 
-/// Opens a console for the prompts, shows the hash or the failure in it, and waits for Enter so
-/// the text can be read and copied before the console closes with the process.
-fn run_in_own_console() -> ExitStatus {
-    // SAFETY: plain call; this process has no console here, so a new one is made for it.
-    if let Err(error) = unsafe { AllocConsole() } {
-        report(
-            Severity::Error,
-            &format!(
-                "overlay-lock: could not open a console: {}",
-                error.message()
-            ),
-        );
-        return ExitStatus::Failure;
-    }
-    let console = match Console::open() {
-        Ok(console) => console,
-        Err(failure) => {
-            if let Failure::Message(message) = failure {
-                report(Severity::Error, &format!("overlay-lock: {message}"));
-            }
+/// Asks on the console the process has, or opens one, and shows the hash or the failure there.
+/// A console it opened closes with the process, so it waits for Enter first, and the text can be
+/// read and copied.
+fn run_without_standard_input() -> ExitStatus {
+    // A console can be attached while standard input is closed; it is used as it is.
+    let (console, opened) = if let Ok(console) = Console::open() {
+        (console, false)
+    } else {
+        // SAFETY: plain call; this process has no console here, so a new one is made for it.
+        if let Err(error) = unsafe { AllocConsole() } {
+            report(
+                Severity::Error,
+                &format!(
+                    "overlay-lock: could not open a console: {}",
+                    error.message()
+                ),
+            );
             return ExitStatus::Failure;
+        }
+        match Console::open() {
+            Ok(console) => (console, true),
+            Err(failure) => {
+                if let Failure::Message(message) = failure {
+                    report(Severity::Error, &format!("overlay-lock: {message}"));
+                }
+                return ExitStatus::Failure;
+            }
         }
     };
     let (status, text) = match ask_twice(&console).and_then(|password| hash_text(&password)) {
-        Ok(hash) => (
-            ExitStatus::Unlocked,
-            format!("\n{hash}\n\nCopy the hash above, then press Enter to close.\n"),
-        ),
+        Ok(hash) => (ExitStatus::Unlocked, format!("\n{hash}\n")),
         Err(Failure::Cancelled) => return ExitStatus::Failure,
-        Err(Failure::Message(message)) => (
-            ExitStatus::Failure,
-            format!("\noverlay-lock: {message}\n\nPress Enter to close.\n"),
-        ),
+        Err(Failure::Message(message)) => {
+            (ExitStatus::Failure, format!("\noverlay-lock: {message}\n"))
+        }
     };
     console.write(&text);
-    let _ = console.read_line();
+    if opened {
+        console.write(match status {
+            ExitStatus::Unlocked => "\nCopy the hash above, then press Enter to close.\n",
+            _ => "\nPress Enter to close.\n",
+        });
+        let _ = console.read_line();
+    }
     status
 }
 
@@ -122,12 +131,10 @@ fn standard_input() -> Source {
     if handle.is_invalid() {
         return Source::Nothing;
     }
-    let mut mode = CONSOLE_MODE::default();
-    // SAFETY: `mode` is writable and `handle` is the process's own standard input handle.
-    if unsafe { GetConsoleMode(handle, &raw mut mode) }.is_ok() {
+    if is_console(handle) {
         return Source::Console;
     }
-    // SAFETY: as above.
+    // SAFETY: `handle` is the process's own standard input handle.
     if unsafe { GetFileType(handle) } == FILE_TYPE_UNKNOWN {
         return Source::Nothing;
     }
@@ -261,9 +268,7 @@ impl Console {
     }
 
     fn write(&self, text: &str) {
-        let wide: Vec<u16> = text.encode_utf16().collect();
-        // SAFETY: `output` is an open console output handle and `wide` outlives the call.
-        let _ = unsafe { WriteConsoleW(self.output, &wide, None, None) };
+        let _ = write_console(self.output, text);
     }
 
     /// Reads one line with echo and line editing off. The console's mode is restored before it
@@ -287,31 +292,23 @@ impl Console {
         line
     }
 
+    /// Reads one unit at a time, so the units after Enter stay in the console's buffer for the
+    /// next line: both entries pasted at once still answer both prompts.
     fn read_raw_line(&self) -> Result<Vec<u16>, Failure> {
         let mut line = Vec::new();
-        let mut buffer = [0u16; 64];
         loop {
+            let mut unit = 0u16;
             let mut read = 0u32;
-            // SAFETY: `buffer` is writable for the length passed, and `read` receives the count.
-            unsafe {
-                ReadConsoleW(
-                    self.input,
-                    buffer.as_mut_ptr().cast(),
-                    u32::try_from(buffer.len()).expect("small buffer"),
-                    &raw mut read,
-                    None,
-                )
-            }
-            .map_err(|error| Failure::Message(console_error(&error)))?;
+            // SAFETY: `unit` is writable for the one unit asked for, and `read` receives the count.
+            unsafe { ReadConsoleW(self.input, (&raw mut unit).cast(), 1, &raw mut read, None) }
+                .map_err(|error| Failure::Message(console_error(&error)))?;
             if read == 0 {
                 return Err(Failure::Message("the console input ended".to_owned()));
             }
-            for &unit in &buffer[..read as usize] {
-                match edit(&mut line, unit) {
-                    Edit::More => {}
-                    Edit::Done => return Ok(line),
-                    Edit::Cancel => return Err(Failure::Cancelled),
-                }
+            match edit(&mut line, unit) {
+                Edit::More => {}
+                Edit::Done => return Ok(line),
+                Edit::Cancel => return Err(Failure::Cancelled),
             }
         }
     }
